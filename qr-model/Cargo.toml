@@ -1,0 +1,12 @@
+[package]
+name = "qr-model"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+chrono = { version = "0.4.38", features = ["serde"] }
+log = "0.4.22"
+rust_decimal = "1.36.0"
+schemars = { version = "0.8.21", features = ["chrono"] }
+serde = { version = "1.0.209", features = ["derive"] }
+serde_json = "1.0.127"

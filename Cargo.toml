@@ -1,0 +1,5 @@
+[workspace]
+members = [ "qr-model",
+    "qr-model",
+    "qr-server",
+]
