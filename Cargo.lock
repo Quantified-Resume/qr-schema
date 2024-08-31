@@ -1051,11 +1051,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "qr-repo"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "qr-model",
+ "rusqlite",
+ "serde_json",
+]
+
+[[package]]
 name = "qr-server"
 version = "0.1.0"
 dependencies = [
+ "log",
+ "qr-model",
+ "qr-repo",
  "rocket",
  "rusqlite",
+ "serde",
 ]
 
 [[package]]
@@ -1240,6 +1254,7 @@ dependencies = [
  "rocket_codegen",
  "rocket_http",
  "serde",
+ "serde_json",
  "state",
  "tempfile",
  "time",

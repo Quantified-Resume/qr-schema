@@ -1,6 +1,7 @@
 {
     "cSpell.words": [
         "chrono",
+        "rowid",
         "rusqlite",
         "schemars",
         "serde"

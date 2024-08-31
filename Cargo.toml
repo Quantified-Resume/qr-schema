@@ -1,5 +1,7 @@
 [workspace]
-members = [ "qr-model",
-    "qr-model",
+members = [ 
+    "qr-model", "qr-repo",
     "qr-server",
 ]
+
+resolver = "2"

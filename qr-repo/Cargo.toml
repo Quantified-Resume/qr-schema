@@ -1,0 +1,15 @@
+[package]
+name = "qr-repo"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "qr_repo"
+path = "src/lib.rs"
+
+[dependencies]
+rusqlite = "0.32.1"
+
+qr-model = { path = "../qr-model" }
+serde_json = "1.0.127"
+chrono = { version = "0.4.38", features = ["serde"] }
