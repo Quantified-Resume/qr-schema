@@ -2,28 +2,36 @@ use qr_model::Bucket;
 use qr_repo::select_bucket_by_id;
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use rocket::{get, State};
-use std::collections::HashMap;
+use rocket::{get, post, State};
 
 use crate::get_conn_lock;
 
 use super::common::{HttpErrorJson, RocketState};
 
+#[post("/", data = "<body>", format = "application/json")]
+pub fn create(body: Json<Bucket>, state: &State<RocketState>) -> Result<i64, HttpErrorJson> {
+    let conn: std::sync::MutexGuard<'_, rusqlite::Connection> = get_conn_lock!(state.conn);
+
+    
+}
+
 #[get("/")]
-pub fn query_bucket_page() -> Result<Json<HashMap<String, Bucket>>, HttpErrorJson> {
-    Ok(Json(HashMap::new()))
+pub fn get_page() -> Result<Json<Vec<Bucket>>, HttpErrorJson> {
+    Ok(Json(vec![]))
 }
 
 #[get("/<bucket_id>")]
-pub fn query_bucket_detail(
-    bucket_id: &str,
+pub fn get_detail(
+    bucket_id: i64,
     state: &State<RocketState>,
-) -> Result<Bucket, HttpErrorJson> {
+) -> Result<Json<Bucket>, HttpErrorJson> {
     let conn: std::sync::MutexGuard<'_, rusqlite::Connection> = get_conn_lock!(state.conn);
-    let id = bucket_id.parse::<i64>().unwrap();
 
-    match select_bucket_by_id(&conn, id) {
-        Some(val) => Ok(val),
-        None => Err(HttpErrorJson::new(Status::BadRequest, "Bucket not found".to_string())),
+    match select_bucket_by_id(&conn, bucket_id) {
+        Some(val) => Ok(Json(val)),
+        None => Err(HttpErrorJson::new(
+            Status::BadRequest,
+            "Bucket not found".to_string(),
+        )),
     }
 }

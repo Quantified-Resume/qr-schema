@@ -1,3 +1,5 @@
+use std::fmt::{Display, Error};
+
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -17,6 +19,18 @@ pub struct Bucket {
     pub created: DateTime<Utc>,
     pub last_modified: DateTime<Utc>,
     pub payload: Option<Map<String, Value>>,
+}
+
+impl Display for Bucket {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match serde_json::to_string(&self) {
+            Ok(json_str) => {
+                write!(f, "{}", json_str).unwrap();
+                Ok(())
+            }
+            Err(_e) => Err(Error::default()),
+        }
+    }
 }
 
 #[test]

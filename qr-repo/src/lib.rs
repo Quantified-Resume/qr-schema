@@ -1,8 +1,12 @@
 mod bucket;
 mod convert;
 mod core;
+mod initializer;
+mod sequence;
+mod util;
 
 pub use self::bucket::select_bucket_by_id;
+pub use self::initializer::init_tables;
 
 pub fn add(left: u64, right: u64) -> u64 {
     left + right

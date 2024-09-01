@@ -1,6 +1,6 @@
 use chrono::{DateTime, NaiveDateTime, Utc};
 use rusqlite::Error;
-use serde_json::{self, from_value, json, Map, Value};
+use serde_json::{self, from_str, Map, Value};
 
 pub fn date_from_sql(res: Result<String, Error>) -> Option<DateTime<Utc>> {
     let col_val = res.unwrap();
@@ -13,16 +13,12 @@ pub fn date_from_sql(res: Result<String, Error>) -> Option<DateTime<Utc>> {
 }
 
 pub fn json_map_from_sql(res: Result<String, Error>) -> Option<Map<String, Value>> {
-    let json_value = match res.map(|val: String| json!(val)) {
-        Ok(res) => Some(res),
-        Err(_) => None,
-    };
-    if json_value.is_none() {
+    if res.is_err() {
         return None;
     }
-    let val = json_value.unwrap();
-    let from_res: Result<Map<String, Value>, serde_json::Error> = from_value(val);
-    match from_res {
+    let json_str = res.unwrap();
+    let json_res: Result<Map<String, serde_json::Value>, serde_json::Error> = from_str(&json_str);
+    match json_res {
         Ok(val) => Some(val),
         Err(_) => None,
     }

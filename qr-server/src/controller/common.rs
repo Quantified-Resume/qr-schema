@@ -1,6 +1,9 @@
+use std::io::Cursor;
 use std::sync::Mutex;
 
-use rocket::http::Status;
+use rocket::http::ContentType;
+use rocket::response::{self};
+use rocket::{http::Status, request::Request, response::Responder, Response};
 use rusqlite::Connection;
 use serde::Serialize;
 
@@ -31,6 +34,18 @@ impl HttpErrorJson {
 
     pub fn system_error(status: Status) -> Self {
         HttpErrorJson::new(status, "System error".to_string())
+    }
+}
+
+impl<'r> Responder<'r, 'static> for HttpErrorJson {
+    fn respond_to(self, _: &Request) -> response::Result<'static> {
+        // TODO: Fix unwrap
+        let body = serde_json::to_string(&self).unwrap();
+        Response::build()
+            .status(self.status)
+            .sized_body(body.len(), Cursor::new(body))
+            .header(ContentType::new("application", "json"))
+            .ok()
     }
 }
 
