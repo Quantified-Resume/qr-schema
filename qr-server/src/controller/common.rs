@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::io::Cursor;
 use std::sync::Mutex;
 
@@ -32,11 +33,11 @@ impl HttpErrorJson {
         }
     }
 
-    pub fn system_error(status: Status) -> Self {
-        HttpErrorJson::new(status, "System error")
-    }
-
-    pub fn internal_error(msg: &str) -> Self {
+    pub fn from_err<E>(msg: &str, err: E) -> Self
+    where
+        E: Debug,
+    {
+        println!("Error occurred: {:?}", err);
         HttpErrorJson::new(Status::InternalServerError, msg)
     }
 }
@@ -61,7 +62,7 @@ macro_rules! get_conn_lock {
             Err(e) => {
                 use rocket::http::Status;
                 println!("Server is busy, error={}", e);
-                let err = HttpErrorJson::system_error(Status::ServiceUnavailable);
+                let err = HttpErrorJson::new(Status::ServiceUnavailable, "Service available");
                 return Err(err);
             }
         }

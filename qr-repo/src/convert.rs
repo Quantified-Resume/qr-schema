@@ -1,5 +1,5 @@
 use chrono::{DateTime, NaiveDateTime, Utc};
-use rusqlite::Error;
+use rusqlite::{Error, Result};
 use serde_json::{self, from_str, Map, Value};
 
 pub fn date_from_sql(res: Result<String, Error>) -> Option<DateTime<Utc>> {
@@ -9,6 +9,13 @@ pub fn date_from_sql(res: Result<String, Error>) -> Option<DateTime<Utc>> {
     match res {
         Ok(date) => Some(date.to_utc()),
         Err(e) => panic!("Time parse failure {}", e),
+    }
+}
+
+pub fn str_from_sql(res: Result<String, Error>) -> Option<String> {
+    match res {
+        Ok(val) => Some(val),
+        Err(_) => None,
     }
 }
 

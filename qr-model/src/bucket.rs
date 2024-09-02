@@ -5,7 +5,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::tag;
+use crate::{tag, Builtin};
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -13,6 +13,8 @@ pub struct Bucket {
     pub id: Option<u64>,
     pub no: Option<i64>,
     pub name: String,
+    pub builtin: Option<Builtin>,
+    pub builtin_ref_id: Option<String>,
     pub desc: Option<String>,
     pub url: Option<String>,
     pub tag: Option<Vec<tag::Tag>>,
@@ -39,6 +41,8 @@ fn test_bucket() {
         id: None,
         no: None,
         name: "BucketName".to_string(),
+        builtin: Some(Builtin::BrowserTime),
+        builtin_ref_id: None,
         desc: None,
         url: None,
         tag: None,
