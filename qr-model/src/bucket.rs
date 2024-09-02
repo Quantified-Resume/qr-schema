@@ -11,13 +11,13 @@ use crate::tag;
 #[serde(rename_all = "camelCase")]
 pub struct Bucket {
     pub id: Option<u64>,
-    pub no: Option<String>,
+    pub no: Option<i64>,
     pub name: String,
     pub desc: Option<String>,
     pub url: Option<String>,
     pub tag: Option<Vec<tag::Tag>>,
-    pub created: DateTime<Utc>,
-    pub last_modified: DateTime<Utc>,
+    pub created: Option<DateTime<Utc>>,
+    pub last_modified: Option<DateTime<Utc>>,
     pub payload: Option<Map<String, Value>>,
 }
 
@@ -42,8 +42,8 @@ fn test_bucket() {
         desc: None,
         url: None,
         tag: None,
-        created: DateTime::default(),
-        last_modified: DateTime::default(),
+        created: Some(DateTime::default()),
+        last_modified: Some(DateTime::default()),
         payload: None,
     };
     println!("Bucket={:?}", bucket)

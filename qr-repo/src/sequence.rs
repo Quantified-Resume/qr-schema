@@ -1,9 +1,8 @@
-use chrono::format::format;
-use rusqlite::{params, Connection};
+use rusqlite::{ffi::Error, params, Connection};
 
 use crate::{
     core::{check_table_exist, Column, ColumnType, Table},
-    util::{self, select_one_row},
+    util::select_one_row,
 };
 
 const TABLE_NAME: &str = "sequence";
@@ -50,20 +49,37 @@ fn seq_config(seq: Sequence) -> SequenceConf {
 }
 
 fn init_seq(conn: &Connection, conf: &SequenceConf) {
-    // TODO
-    let sql = format!("INSERT INTO {} VALUES ()", TABLE_NAME);
+    let sql = format!(
+        "INSERT INTO {} (key, value, step) VALUES (?, ?, ?)",
+        TABLE_NAME
+    );
+    conn.execute(&sql, params![conf.key, conf.initial, conf.step])
+        .expect("Failed to init sequence");
 }
 
-pub fn next_seq(conn: &Connection, sequence: Sequence) -> i64 {
+pub fn next_seq(conn: &Connection, sequence: Sequence) -> Result<i64, Error> {
     let conf = seq_config(sequence);
-    let sql = format!("SELECT value FROM {} WHERE key = :key", TABLE_NAME);
-    let exist: Option<i64> =
-        util::select_one_row(conn, &sql, &[(":key", &conf.key)], |row| row.get(0));
+
+    let sql: String = format!("SELECT value, step FROM {} WHERE key = :key", TABLE_NAME);
+    let exist: Option<(i64, i64)> = select_one_row(conn, &sql, &[(":key", &conf.key)], |row| {
+        let value_cell: Result<i64, rusqlite::Error> = row.get(0);
+        let step_cell: Result<i64, rusqlite::Error> = row.get(1);
+        value_cell.and_then(|value| step_cell.map(|step| (value, step)))
+    });
     match exist {
-        Some(val) => {}
+        Some((val, step)) => {
+            let sql = format!(
+                "UPDATE {} SET value = value + step where value = ? and key = ?",
+                TABLE_NAME
+            );
+            conn.prepare(&sql)
+                .and_then(|mut s| s.execute(params![val, conf.key]))
+                .and_then(|_| Ok(val + step))
+                .map_err(|_| Error::new(0i32))
+        }
         None => {
             init_seq(conn, &conf);
-            conf.initial
+            Ok(conf.initial)
         }
     }
 }

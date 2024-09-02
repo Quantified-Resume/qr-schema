@@ -25,15 +25,19 @@ pub struct HttpErrorJson {
 }
 
 impl HttpErrorJson {
-    pub fn new(status: Status, msg: String) -> Self {
+    pub fn new(status: Status, msg: &str) -> Self {
         HttpErrorJson {
             status,
-            message: msg,
+            message: String::from(msg),
         }
     }
 
     pub fn system_error(status: Status) -> Self {
-        HttpErrorJson::new(status, "System error".to_string())
+        HttpErrorJson::new(status, "System error")
+    }
+
+    pub fn internal_error(msg: &str) -> Self {
+        HttpErrorJson::new(Status::InternalServerError, msg)
     }
 }
 

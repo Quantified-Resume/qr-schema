@@ -11,7 +11,7 @@ pub fn register_controllers(conn: Mutex<Connection>) -> Rocket<Build> {
     let ctx = RocketState::new(conn);
     let rocket = rocket::custom(Config::debug_default()).manage(ctx).mount(
         "/api/0/bucket",
-        routes![bucket::get_page, bucket::get_detail],
+        routes![bucket::create, bucket::get_page, bucket::get_detail],
     );
     rocket
 }

@@ -1,5 +1,5 @@
 use qr_model::Bucket;
-use rusqlite::{params, Connection};
+use rusqlite::{ffi::Error, params, Connection};
 use serde_json;
 
 use crate::{
@@ -28,13 +28,13 @@ pub fn init_table(conn: &Connection) {
     check_table_exist(conn, TABLE_NAME, table_def);
 }
 
-pub fn insert_bucket(conn: &Connection, bucket: &Bucket) -> i64 {
+pub fn insert_bucket(conn: &Connection, bucket: &Bucket) -> Result<i64, Error> {
     let sql = format!(
         "INSERT INTO {} (no, name, desc, url, payload) VALUES (?1, ?2, ?3, ?4, ?5);",
         TABLE_NAME
     );
     let mut statement = conn.prepare(&sql).unwrap();
-    let _ = statement
+    statement
         .execute(params![
             bucket.no,
             bucket.name,
@@ -45,8 +45,8 @@ pub fn insert_bucket(conn: &Connection, bucket: &Bucket) -> i64 {
                 None => "{}".to_string(),
             },
         ])
-        .expect("Insert bucket failure");
-    conn.last_insert_rowid()
+        .and_then(|_| Ok(conn.last_insert_rowid()))
+        .map_err(|_| Error::new(-1i32))
 }
 
 pub fn select_bucket_by_id(conn: &Connection, id: i64) -> Option<Bucket> {
@@ -62,8 +62,8 @@ pub fn select_bucket_by_id(conn: &Connection, id: i64) -> Option<Bucket> {
             desc: row.get_unwrap(3),
             url: row.get_unwrap(4),
             tag: None,
-            created: date_from_sql(row.get(6)).expect("Failed to query create_time"),
-            last_modified: date_from_sql(row.get(7)).expect("Failed to query modify_time"),
+            created: Some(date_from_sql(row.get(6)).expect("Failed to query create_time")),
+            last_modified: Some(date_from_sql(row.get(7)).expect("Failed to query modify_time")),
             payload: json_map_from_sql(row.get(5)),
         })
     })
@@ -85,23 +85,23 @@ fn test() {
 
     let bucket = Bucket {
         id: None,
-        no: Some("234".to_string()),
+        no: Some(234),
         name: "foobar".to_string(),
         desc: Some("Mock description".to_string()),
         url: Some("https://qr.com".to_string()),
         tag: None,
-        created: DateTime::default(),
-        last_modified: DateTime::default(),
+        created: Some(DateTime::default()),
+        last_modified: Some(DateTime::default()),
         payload: Some(payload),
     };
-    let id = insert_bucket(&conn, &bucket);
+    let id = insert_bucket(&conn, &bucket).unwrap();
     assert!(id > 0);
     println!("Bucket inserted: id={}", id);
 
     let mut bucket_res = select_bucket_by_id(&conn, id);
     let b = bucket_res.unwrap();
     assert_eq!(b.id.clone().unwrap(), 1);
-    assert_eq!(b.no.clone().unwrap(), "234".to_string());
+    assert_eq!(b.no.clone().unwrap(), 234);
     assert_eq!(b.name, "foobar".to_string());
     assert_eq!(b.desc.clone().unwrap(), "Mock description".to_string());
     assert_eq!(b.url.clone().unwrap(), "https://qr.com".to_string());
