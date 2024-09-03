@@ -1,7 +1,10 @@
-use std::str::FromStr;
+use std::{
+    str::FromStr,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use qr_model::{Bucket, Builtin};
-use rusqlite::{ffi::Error, params, Connection};
+use rusqlite::{params, Connection, Row};
 use serde_json;
 
 use crate::{
@@ -16,7 +19,7 @@ fn table_def() -> Table {
     Table {
         name: TABLE_NAME.to_string(),
         columns: vec![
-            Column::required("no", ColumnType::Text),
+            Column::required("no", ColumnType::Integer),
             Column::required("name", ColumnType::Text),
             Column::nullable("builtin", ColumnType::Text),
             Column::nullable("builtin_ref_id", ColumnType::Text), // Ref ID of builtin channel
@@ -32,9 +35,9 @@ pub fn init_table(conn: &Connection) {
     check_table_exist(conn, TABLE_NAME, table_def);
 }
 
-pub fn insert_bucket(conn: &Connection, bucket: &Bucket) -> Result<i64, Error> {
+pub fn insert_bucket(conn: &Connection, bucket: &Bucket) -> rusqlite::Result<i64> {
     let sql = format!(
-        "INSERT INTO {} (no, name, desc, url, payload) VALUES (?1, ?2, ?3, ?4, ?5);",
+        "INSERT INTO {} (no, name, desc, url, payload, builtin, builtin_ref_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         TABLE_NAME
     );
     let mut statement = conn.prepare(&sql).unwrap();
@@ -48,55 +51,90 @@ pub fn insert_bucket(conn: &Connection, bucket: &Bucket) -> Result<i64, Error> {
                 Some(val) => serde_json::to_string(val).unwrap(),
                 None => "{}".to_string(),
             },
+            bucket.builtin,
+            bucket.builtin_ref_id,
         ])
         .and_then(|_| Ok(conn.last_insert_rowid()))
-        .map_err(|_| Error::new(-1i32))
 }
 
-const ALL_COLUMNS: &str =
-    "id, no, name, builtin, builtin_ref_id, desc, url, payload, create_time, modify_time";
-
 pub fn select_bucket_by_id(conn: &Connection, id: i64) -> Option<Bucket> {
-    let sql = format!(
-        "SELECT {} FROM {} WHERE id = :id limit 1",
-        ALL_COLUMNS, TABLE_NAME
-    );
-    util::select_one_row(conn, &sql, &[(":id", &id.to_string())], |row| {
-        let builtin = str_from_sql(row.get("builtin")).and_then(|val| Builtin::from_str(&val).ok());
-        Ok(Bucket {
-            id: row.get_unwrap("id"),
-            no: row.get_unwrap("no"),
-            name: row.get_unwrap("name"),
-            builtin,
-            builtin_ref_id: row.get("builtin_ref_id").ok(),
-            desc: row.get_unwrap("desc"),
-            url: row.get_unwrap("url"),
-            tag: None,
-            created: Some(
-                date_from_sql(row.get("create_time")).expect("Failed to query create_time"),
-            ),
-            last_modified: Some(
-                date_from_sql(row.get("modify_time")).expect("Failed to query modify_time"),
-            ),
-            payload: json_map_from_sql(row.get("payload")),
-        })
+    let sql = format!("SELECT * FROM {} WHERE id = :id limit 1", TABLE_NAME);
+    util::select_one_row(conn, &sql, &[(":id", &id.to_string())], map_row)
+}
+
+fn map_row(row: &Row<'_>) -> rusqlite::Result<Bucket> {
+    let builtin = str_from_sql(row.get("builtin")).and_then(|val| Builtin::from_str(&val).ok());
+    Ok(Bucket {
+        id: row.get_unwrap("id"),
+        no: row.get_unwrap("no"),
+        name: row.get_unwrap("name"),
+        builtin,
+        builtin_ref_id: row.get("builtin_ref_id").ok(),
+        desc: row.get_unwrap("desc"),
+        url: row.get_unwrap("url"),
+        tag: None,
+        created: Some(date_from_sql(row.get("create_time")).expect("Failed to query create_time")),
+        last_modified: Some(
+            date_from_sql(row.get("modify_time")).expect("Failed to query modify_time"),
+        ),
+        payload: json_map_from_sql(row.get("payload")),
     })
 }
 
 pub fn select_bucket_by_builtin(
     conn: &Connection,
-    builtin: Builtin,
-    builtin_ref_id: Option<String>,
+    builtin: &Builtin,
+    builtin_ref_id: Option<&str>,
 ) -> Option<Bucket> {
-    let mut sql = format!(
-        "SELECT {} FROM {} WHERE builtin = :b",
-        ALL_COLUMNS, TABLE_NAME
+    let b_str = builtin.as_ref();
+    match builtin_ref_id {
+        Some(ref_id) => {
+            let sql = format!(
+                "SELECT * FROM {} WHERE builtin = :b and builtin_ref_id = :rid LIMIT 1",
+                TABLE_NAME
+            );
+            select_one_row(conn, &sql, &[(":b", b_str), (":rid", ref_id)], map_row)
+        }
+        None => {
+            let sql = format!(
+                "SELECT * FROM {} WHERE builtin = :b and builtin_ref_id IS NULL LIMIT 1",
+                TABLE_NAME
+            );
+            select_one_row(conn, &sql, &[(":b", b_str)], map_row)
+        }
+    }
+}
+
+pub fn select_all_buckets(conn: &Connection) -> Vec<Bucket> {
+    let sql: String = format!("SELECT * FROM {}", TABLE_NAME);
+    let mut stmt = conn.prepare(&sql).unwrap();
+    let mut rows = stmt.query([]).unwrap();
+    let mut res: Vec<Bucket> = Vec::new();
+    while let Some(row) = rows.next().unwrap() {
+        let b = map_row(row).unwrap();
+        res.push(b);
+    }
+
+    return res;
+}
+
+pub fn update_bucket_by_id(conn: &Connection, bucket: &Bucket) -> rusqlite::Result<()> {
+    let sql = format!(
+        "UPDATE {} SET modify_time = ?, name = ?, desc = ? WHERE id = ?",
+        TABLE_NAME
     );
-    if builtin_ref_id.is_some() {
-        sql.push_str(" AND builtin_ref_id = :b_id");
-    };
-    sql.push_str(" LIMIT 1");
-    select_one_row(conn, &sql, [(":b", builtin.)], f)
+    let mut stmt = conn.prepare(&sql).unwrap();
+    stmt.execute(params![
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            .to_string(),
+        bucket.name,
+        bucket.desc,
+        bucket.id
+    ])
+    .map(|_| ())
 }
 
 #[test]

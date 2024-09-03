@@ -40,6 +40,11 @@ impl HttpErrorJson {
         println!("Error occurred: {:?}", err);
         HttpErrorJson::new(Status::InternalServerError, msg)
     }
+
+    pub fn bucket_not_found(id: i64) -> Self {
+        println!("Bucket not found: id={:?}", id);
+        HttpErrorJson::new(Status::NotFound, "Bucket not found")
+    }
 }
 
 impl<'r> Responder<'r, 'static> for HttpErrorJson {
@@ -62,7 +67,7 @@ macro_rules! get_conn_lock {
             Err(e) => {
                 use rocket::http::Status;
                 println!("Server is busy, error={}", e);
-                let err = HttpErrorJson::new(Status::ServiceUnavailable, "Service available");
+                let err = HttpErrorJson::new(Status::ServiceUnavailable, "Service unavailable");
                 return Err(err);
             }
         }

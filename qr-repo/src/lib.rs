@@ -5,7 +5,10 @@ mod initializer;
 mod sequence;
 mod util;
 
-pub use self::bucket::{insert_bucket, select_bucket_by_id};
+pub use self::bucket::{
+    insert_bucket, select_all_buckets, select_bucket_by_builtin, select_bucket_by_id,
+    update_bucket_by_id,
+};
 pub use self::initializer::init_tables;
 pub use self::sequence::{next_seq, Sequence};
 

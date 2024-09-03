@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection, Result};
+use rusqlite::{params, Connection};
 
 pub enum ColumnType {
     Integer,
@@ -51,7 +51,9 @@ pub struct Table {
 pub fn check_table_exist(conn: &Connection, table_name: &str, table_f: fn() -> Table) -> bool {
     let sql = "SELECT count(`name`) from `sqlite_master` WHERE `type` = 'table' AND name = ?";
     let mut statement = conn.prepare(sql).unwrap();
-    let res = statement.query_row(params![table_name], |row| row.get(0) as Result<i32>);
+    let res = statement.query_row(params![table_name], |row| {
+        row.get(0) as rusqlite::Result<i32>
+    });
     let exist = res.unwrap() > 0;
     if !exist {
         let table = table_f();

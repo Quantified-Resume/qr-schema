@@ -1,3 +1,4 @@
+use rusqlite::ToSql;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, EnumString};
@@ -11,8 +12,13 @@ pub enum Builtin {
 impl Builtin {
     pub fn is_multiple(&self) -> bool {
         match self {
-            Self::BrowserTime => true,
-            _ => false,
+            Builtin::BrowserTime => true,
         }
+    }
+}
+
+impl ToSql for Builtin {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
+        Ok(self.as_ref().into())
     }
 }

@@ -1050,6 +1050,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "log",
+ "rusqlite",
  "rust_decimal",
  "schemars",
  "serde",
