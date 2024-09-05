@@ -5,6 +5,7 @@ pub enum ColumnType {
     Text,
     Json,
     Bool,
+    TimeStamp,
 }
 
 pub struct Column {
@@ -75,10 +76,8 @@ fn create_table(conn: &Connection, table: Table) -> Result<usize, rusqlite::Erro
 
 fn col_ddl(column: &Column) -> String {
     let col_type = match column.type_ {
-        ColumnType::Bool => "INTEGER",
-        ColumnType::Integer => "INTEGER",
-        ColumnType::Json => "TEXT",
-        ColumnType::Text => "TEXT",
+        ColumnType::Bool | ColumnType::Integer | ColumnType::TimeStamp => "INTEGER",
+        ColumnType::Json | ColumnType::Text => "TEXT",
     };
 
     let mut ddl = format!("`{}`\t\t{}", column.name, col_type);

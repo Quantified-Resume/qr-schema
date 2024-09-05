@@ -3,7 +3,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use qr_model::{Bucket, Builtin};
+use qr_model::{Bucket, BucketStatus, Builtin};
 use rusqlite::{params, Connection, Row};
 use serde_json;
 
@@ -23,6 +23,7 @@ fn table_def() -> Table {
             Column::required("name", ColumnType::Text),
             Column::nullable("builtin", ColumnType::Text),
             Column::nullable("builtin_ref_id", ColumnType::Text), // Ref ID of builtin channel
+            Column::nullable("status", ColumnType::Text),
             Column::nullable("desc", ColumnType::Text),
             Column::nullable("url", ColumnType::Text), // Reserved field
             Column::nullable("payload", ColumnType::Json),
@@ -37,14 +38,15 @@ pub fn init_table(conn: &Connection) {
 
 pub fn insert_bucket(conn: &Connection, bucket: &Bucket) -> rusqlite::Result<i64> {
     let sql = format!(
-        "INSERT INTO {} (no, name, desc, url, payload, builtin, builtin_ref_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO {} (no, name, status, desc, url, payload, builtin, builtin_ref_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         TABLE_NAME
     );
-    let mut statement = conn.prepare(&sql).unwrap();
+    let mut statement = conn.prepare(&sql)?;
     statement
         .execute(params![
             bucket.no,
             bucket.name,
+            bucket.status.as_ref(),
             bucket.desc,
             bucket.url,
             match &bucket.payload {
@@ -54,22 +56,26 @@ pub fn insert_bucket(conn: &Connection, bucket: &Bucket) -> rusqlite::Result<i64
             bucket.builtin,
             bucket.builtin_ref_id,
         ])
-        .and_then(|_| Ok(conn.last_insert_rowid()))
+        .map(|_| conn.last_insert_rowid())
 }
 
-pub fn select_bucket_by_id(conn: &Connection, id: i64) -> Option<Bucket> {
+pub fn select_bucket(conn: &Connection, id: i64) -> Option<Bucket> {
     let sql = format!("SELECT * FROM {} WHERE id = :id limit 1", TABLE_NAME);
     util::select_one_row(conn, &sql, &[(":id", &id.to_string())], map_row)
 }
 
 fn map_row(row: &Row<'_>) -> rusqlite::Result<Bucket> {
     let builtin = str_from_sql(row.get("builtin")).and_then(|val| Builtin::from_str(&val).ok());
+    let status = str_from_sql(row.get("status"))
+        .and_then(|val: String| BucketStatus::from_str(&val).ok())
+        .unwrap_or_default();
     Ok(Bucket {
         id: row.get_unwrap("id"),
         no: row.get_unwrap("no"),
         name: row.get_unwrap("name"),
         builtin,
         builtin_ref_id: row.get("builtin_ref_id").ok(),
+        status,
         desc: row.get_unwrap("desc"),
         url: row.get_unwrap("url"),
         tag: None,
@@ -115,15 +121,15 @@ pub fn select_all_buckets(conn: &Connection) -> Vec<Bucket> {
         res.push(b);
     }
 
-    return res;
+    res
 }
 
-pub fn update_bucket_by_id(conn: &Connection, bucket: &Bucket) -> rusqlite::Result<()> {
+pub fn update_bucket(conn: &Connection, bucket: &Bucket) -> rusqlite::Result<()> {
     let sql = format!(
         "UPDATE {} SET modify_time = ?, name = ?, desc = ? WHERE id = ?",
         TABLE_NAME
     );
-    let mut stmt = conn.prepare(&sql).unwrap();
+    let mut stmt = conn.prepare(&sql)?;
     stmt.execute(params![
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -135,6 +141,11 @@ pub fn update_bucket_by_id(conn: &Connection, bucket: &Bucket) -> rusqlite::Resu
         bucket.id
     ])
     .map(|_| ())
+}
+
+pub fn delete_bucket(conn: &Connection, bucket_id: i64) -> rusqlite::Result<()> {
+    let sql = format!("DELETE FROM {} where id = ?1", TABLE_NAME);
+    conn.execute(&sql, [bucket_id]).map(|_| ())
 }
 
 #[test]
@@ -157,6 +168,7 @@ fn test() {
         name: "foobar".to_string(),
         builtin: Some(Builtin::BrowserTime),
         builtin_ref_id: None,
+        status: BucketStatus::Enabled,
         desc: Some("Mock description".to_string()),
         url: Some("https://qr.com".to_string()),
         tag: None,
@@ -168,7 +180,7 @@ fn test() {
     assert!(id > 0);
     println!("Bucket inserted: id={}", id);
 
-    let mut bucket_res = select_bucket_by_id(&conn, id);
+    let mut bucket_res = select_bucket(&conn, id);
     let b = bucket_res.unwrap();
     assert_eq!(b.id.clone().unwrap(), 1);
     assert_eq!(b.no.clone().unwrap(), 234);
@@ -177,6 +189,6 @@ fn test() {
     assert_eq!(b.url.clone().unwrap(), "https://qr.com".to_string());
     println!("{}", b);
 
-    bucket_res = select_bucket_by_id(&conn, 2);
+    bucket_res = select_bucket(&conn, 2);
     assert!(bucket_res.is_none());
 }

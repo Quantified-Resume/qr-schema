@@ -41,6 +41,13 @@ impl HttpErrorJson {
         HttpErrorJson::new(Status::InternalServerError, msg)
     }
 
+    pub fn sys_busy<E>(err: E) -> Self
+    where
+        E: Debug,
+    {
+        HttpErrorJson::from_err("System is busy, please try it later", err)
+    }
+
     pub fn bucket_not_found(id: i64) -> Self {
         println!("Bucket not found: id={:?}", id);
         HttpErrorJson::new(Status::NotFound, "Bucket not found")
@@ -49,7 +56,6 @@ impl HttpErrorJson {
 
 impl<'r> Responder<'r, 'static> for HttpErrorJson {
     fn respond_to(self, _: &Request) -> response::Result<'static> {
-        // TODO: Fix unwrap
         let body = serde_json::to_string(&self).unwrap();
         Response::build()
             .status(self.status)

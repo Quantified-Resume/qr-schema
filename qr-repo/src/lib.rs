@@ -2,13 +2,16 @@ mod bucket;
 mod convert;
 mod core;
 mod initializer;
+mod item;
 mod sequence;
 mod util;
 
 pub use self::bucket::{
-    insert_bucket, select_all_buckets, select_bucket_by_builtin, select_bucket_by_id,
-    update_bucket_by_id,
+    delete_bucket, insert_bucket, select_all_buckets, select_bucket, select_bucket_by_builtin,
+    update_bucket,
 };
+pub use self::item::{delete_item_by_bucket_id, exist_item_by_bucket_id, insert_item};
+
 pub use self::initializer::init_tables;
 pub use self::sequence::{next_seq, Sequence};
 

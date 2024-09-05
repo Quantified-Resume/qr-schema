@@ -2,33 +2,34 @@ use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use strum::{AsRefStr, EnumString};
 
 use crate::tag::Tag;
 
-#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+#[derive(EnumString, AsRefStr, Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub enum ItemType {
-    EVENT,
-    RECORD,
+    Event,
+    Record,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone)]
 pub struct NamingEntity {
-    id: Option<u64>,
+    id: Option<i64>,
     name: String,
 }
 
-#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+#[derive(EnumString, AsRefStr, Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub enum RecordMetricsType {
-    TIME,
-    COUNT,
-    AMOUNT,
+    Time,
+    Count,
+    Amount,
 }
 
-#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+#[derive(Serialize, Deserialize, Clone, JsonSchema)]
 pub struct RecordMetrics {
     #[serde(rename = "type")]
     type_: RecordMetricsType,
-    // u64 for TIME and COUNT, decimal for Amount
+    // i64 for TIME and COUNT, decimal for Amount
     value: Value,
     // Only available for AMOUNT
     currency: Option<String>,
@@ -37,19 +38,19 @@ pub struct RecordMetrics {
 #[derive(Serialize, Deserialize, JsonSchema, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Item {
-    id: Option<u64>,
-    ref_key: String,
+    pub id: Option<i64>,
+    pub ref_id: String,
     #[serde(rename = "type")]
-    type_: ItemType,
-    timestamp: DateTime<Utc>,
+    pub type_: ItemType,
+    pub timestamp: DateTime<Utc>,
     // Duration of item, required for EVENT
-    duration: Option<u64>,
-    name: Option<String>,
-    action: String,
-    tags: Option<Vec<Tag>>,
-    place: Option<NamingEntity>,
-    joiners: Option<Vec<NamingEntity>>,
+    pub duration: Option<i64>,
+    pub name: Option<String>,
+    pub action: String,
+    pub tags: Option<Vec<Tag>>,
+    pub place: Option<NamingEntity>,
+    pub joiners: Option<Vec<NamingEntity>>,
     // Value list of item, required for RECORD
-    metrics: Option<Vec<RecordMetrics>>,
-    payload: Option<Map<String, Value>>,
+    pub metrics: Option<Vec<RecordMetrics>>,
+    pub payload: Option<Map<String, Value>>,
 }

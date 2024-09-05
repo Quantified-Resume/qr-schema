@@ -1,21 +1,12 @@
-use qr_model::Bucket;
-use qr_model::Builtin;
-use qr_repo::insert_bucket;
-use qr_repo::next_seq;
-use qr_repo::select_all_buckets;
-use qr_repo::select_bucket_by_builtin;
-use qr_repo::select_bucket_by_id;
-use qr_repo::update_bucket_by_id;
-use qr_repo::Sequence;
-use rocket::http::Status;
-use rocket::put;
-use rocket::serde::json::Json;
-use rocket::{get, post, State};
-use rusqlite::Connection;
-use rusqlite::TransactionBehavior;
+use qr_model::{Bucket, BucketStatus, Builtin};
+use qr_repo::{
+    delete_bucket, delete_item_by_bucket_id, exist_item_by_bucket_id, insert_bucket, next_seq,
+    select_all_buckets, select_bucket, select_bucket_by_builtin, update_bucket, Sequence,
+};
+use rocket::{delete, get, http::Status, post, put, serde::json::Json, State};
+use rusqlite::{Connection, TransactionBehavior};
 use serde::Deserialize;
-use serde_json::Map;
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 use super::common::{HttpErrorJson, RocketState};
 use crate::get_conn_lock;
@@ -37,6 +28,7 @@ impl CreateRequest {
             name: self.name.clone(),
             builtin: self.builtin.clone(),
             builtin_ref_id: self.builtin_ref_id.clone(),
+            status: BucketStatus::Enabled,
             desc: self.desc.clone(),
             url: None,
             tag: None,
@@ -63,7 +55,7 @@ pub fn create(
     }
     let tx_res = conn.transaction_with_behavior(TransactionBehavior::Immediate);
     if tx_res.is_err() {
-        return Err(HttpErrorJson::from_err("DB ERROR", tx_res.unwrap_err()));
+        return Err(HttpErrorJson::sys_busy(tx_res.unwrap_err()));
     }
     let tx = tx_res.unwrap();
     let res = next_seq(&tx, Sequence::Bucket)
@@ -75,11 +67,11 @@ pub fn create(
     match res {
         Ok(id) => tx
             .commit()
-            .map_err(|e| HttpErrorJson::from_err("Failed to commit", e))
+            .map_err(|e| HttpErrorJson::sys_busy(e))
             .map(|_| Json(id)),
         Err(e) => tx
             .rollback()
-            .map_err(|e| HttpErrorJson::from_err("Failed to rollback", e))
+            .map_err(|e| HttpErrorJson::sys_busy(e))
             .and_then(|_| Err(e)),
     }
 }
@@ -120,11 +112,7 @@ pub fn get_detail(
     state: &State<RocketState>,
 ) -> Result<Json<Bucket>, HttpErrorJson> {
     let conn: std::sync::MutexGuard<'_, rusqlite::Connection> = get_conn_lock!(state.conn);
-
-    match select_bucket_by_id(&conn, bucket_id) {
-        Some(val) => Ok(Json(val)),
-        None => Err(HttpErrorJson::bucket_not_found(bucket_id)),
-    }
+    check_bucket_exist(&conn, bucket_id).map(|val| Json(val))
 }
 
 #[derive(Deserialize, Debug)]
@@ -134,21 +122,60 @@ pub struct ModifyRequest {
 }
 
 #[put("/<bucket_id>", data = "<body>", format = "application/json")]
-pub fn modify_detail(
+pub fn modify(
     bucket_id: i64,
     body: Json<ModifyRequest>,
     state: &State<RocketState>,
 ) -> Result<(), HttpErrorJson> {
     let request = body.into_inner();
     let conn: std::sync::MutexGuard<'_, rusqlite::Connection> = get_conn_lock!(state.conn);
-    select_bucket_by_id(&conn, bucket_id)
-        .ok_or(HttpErrorJson::bucket_not_found(bucket_id))
+    check_bucket_exist(&conn, bucket_id)
         .and_then(|exist| {
             let mut clone = exist.clone();
             clone.name = request.name;
             clone.desc = request.desc;
-            update_bucket_by_id(&conn, &clone)
+            update_bucket(&conn, &clone)
                 .map_err(|e| HttpErrorJson::from_err("Failed to save bucket", e))
         })
         .map(|_| ())
+}
+
+#[delete("/<bucket_id>?<force>")]
+pub fn remove(
+    bucket_id: i64,
+    force: Option<bool>,
+    state: &State<RocketState>,
+) -> Result<(), HttpErrorJson> {
+    let mut conn = get_conn_lock!(state.conn);
+    let check_res = check_bucket_exist(&conn, bucket_id);
+    if check_res.is_err() {
+        return check_res.map(|_| ());
+    }
+    let exist_items = exist_item_by_bucket_id(&conn, bucket_id);
+    if exist_items && !force.unwrap_or(false) {
+        return Err(HttpErrorJson::new(
+            Status::BadRequest,
+            "Can't delete bucket with items",
+        ));
+    }
+    let tx_res = conn.transaction_with_behavior(TransactionBehavior::Immediate);
+    if tx_res.is_err() {
+        return Err(HttpErrorJson::sys_busy(tx_res.unwrap_err()));
+    }
+    let tx = tx_res.unwrap();
+    let res = delete_item_by_bucket_id(&tx, bucket_id).and_then(|cnt| {
+        println!("Deleted {} items of bucket[id={}]", cnt, bucket_id);
+        delete_bucket(&tx, bucket_id).map(|_| ())
+    });
+    match res {
+        Ok(_) => tx.commit().map_err(|e| HttpErrorJson::sys_busy(e)),
+        Err(e) => match tx.rollback() {
+            Ok(_) => Err(HttpErrorJson::sys_busy(e)),
+            Err(txe) => Err(HttpErrorJson::sys_busy(txe)),
+        },
+    }
+}
+
+fn check_bucket_exist(conn: &Connection, bucket_id: i64) -> Result<Bucket, HttpErrorJson> {
+    select_bucket(&conn, bucket_id).ok_or(HttpErrorJson::bucket_not_found(bucket_id))
 }

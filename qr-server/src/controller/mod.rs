@@ -13,9 +13,10 @@ pub fn register_controllers(conn: Mutex<Connection>) -> Rocket<Build> {
         "/api/0/bucket",
         routes![
             bucket::create,
-            bucket::list_all,
+            bucket::modify,
+            bucket::remove,
             bucket::get_detail,
-            bucket::modify_detail,
+            bucket::list_all,
         ],
     );
     rocket
