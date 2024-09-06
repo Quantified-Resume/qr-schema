@@ -1,4 +1,4 @@
-use rusqlite::{ffi::Error, params, Connection};
+use rusqlite::{params, Connection};
 
 use crate::{
     core::{check_table_exist, Column, ColumnType, Table},
@@ -18,8 +18,8 @@ fn table_def() -> Table {
     }
 }
 
-pub fn init_table(conn: &Connection) {
-    check_table_exist(conn, TABLE_NAME, table_def);
+pub fn init_table(conn: &Connection) -> rusqlite::Result<bool> {
+    check_table_exist(conn, TABLE_NAME, table_def)
 }
 
 pub enum Sequence {
@@ -57,15 +57,19 @@ fn init_seq(conn: &Connection, conf: &SequenceConf) {
         .expect("Failed to init sequence");
 }
 
-pub fn next_seq(conn: &Connection, sequence: Sequence) -> Result<i64, Error> {
+pub fn next_seq(conn: &Connection, sequence: Sequence) -> rusqlite::Result<i64> {
     let conf = seq_config(sequence);
 
     let sql: String = format!("SELECT value, step FROM {} WHERE key = :key", TABLE_NAME);
-    let exist: Option<(i64, i64)> = select_one_row(conn, &sql, &[(":key", &conf.key)], |row| {
+    let exist_res = select_one_row(conn, &sql, &[(":key", &conf.key)], |row| {
         let value_cell: Result<i64, rusqlite::Error> = row.get(0);
         let step_cell: Result<i64, rusqlite::Error> = row.get(1);
         value_cell.and_then(|value| step_cell.map(|step| (value, step)))
     });
+    if exist_res.is_err() {
+        return Err(exist_res.unwrap_err());
+    }
+    let exist = exist_res.unwrap();
     match exist {
         Some((val, step)) => {
             let sql = format!(
@@ -75,7 +79,6 @@ pub fn next_seq(conn: &Connection, sequence: Sequence) -> Result<i64, Error> {
             conn.prepare(&sql)
                 .and_then(|mut s| s.execute(params![val, conf.key]))
                 .and_then(|_| Ok(val + step))
-                .map_err(|_| Error::new(0i32))
         }
         None => {
             init_seq(conn, &conf);

@@ -1,7 +1,6 @@
 use std::fmt::{Display, Error};
 
 use crate::{tag, Builtin};
-use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -19,8 +18,8 @@ pub struct Bucket {
     pub desc: Option<String>,
     pub url: Option<String>,
     pub tag: Option<Vec<tag::Tag>>,
-    pub created: Option<DateTime<Utc>>,
-    pub last_modified: Option<DateTime<Utc>>,
+    pub created: Option<i64>,
+    pub last_modified: Option<i64>,
     pub payload: Option<Map<String, Value>>,
 }
 
@@ -36,7 +35,9 @@ impl Display for Bucket {
     }
 }
 
-#[derive(EnumString, AsRefStr, Serialize, Deserialize, JsonSchema, Clone, Debug, Default)]
+#[derive(
+    EnumString, AsRefStr, Serialize, Deserialize, JsonSchema, Clone, Debug, Default, PartialEq, Eq,
+)]
 pub enum BucketStatus {
     #[default]
     Enabled,
@@ -55,8 +56,8 @@ fn test_bucket() {
         desc: None,
         url: None,
         tag: None,
-        created: Some(DateTime::default()),
-        last_modified: Some(DateTime::default()),
+        created: None,
+        last_modified: None,
         payload: None,
     };
     println!("Bucket={:?}", bucket)

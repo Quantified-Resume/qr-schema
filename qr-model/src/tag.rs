@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -14,7 +13,7 @@ pub struct Tag {
     id: Option<i64>,
     label: String,
     value: Option<String>,
-    created: DateTime<Utc>,
-    last_modified: DateTime<Utc>,
+    created: Option<i64>,
+    last_modified: Option<i64>,
     usage: TagUsage,
 }

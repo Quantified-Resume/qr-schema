@@ -4,8 +4,8 @@ mod item;
 mod tag;
 
 pub use self::bucket::{Bucket, BucketStatus};
-pub use self::item::{Item, ItemType};
 pub use self::builtin::Builtin;
+pub use self::item::{Item, ItemType, NamingEntity, RecordMetrics};
 
 pub fn add(left: u64, right: u64) -> u64 {
     left + right

@@ -1,6 +1,8 @@
 {
     "cSpell.words": [
+        "AUTOINCREMENT",
         "chrono",
+        "dateparser",
         "rowid",
         "rusqlite",
         "schemars",

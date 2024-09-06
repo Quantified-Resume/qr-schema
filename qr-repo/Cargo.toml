@@ -12,4 +12,5 @@ rusqlite = { version = "0.32.1", features = ["chrono", "serde_json"] }
 
 qr-model = { path = "../qr-model" }
 serde_json = "1.0.127"
-chrono = { version = "0.4.38", features = ["serde"] }
+log = "0.4.22"
+dateparser = "0.2.1"

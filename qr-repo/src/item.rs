@@ -25,13 +25,19 @@ fn table_def() -> Table {
     }
 }
 
-pub fn init_table(conn: &Connection) {
-    check_table_exist(conn, TABLE_NAME, table_def);
+pub fn init_table(conn: &Connection) -> rusqlite::Result<bool> {
+    check_table_exist(conn, TABLE_NAME, table_def)
 }
 
 pub fn exist_item_by_bucket_id(conn: &Connection, bucket_id: i64) -> bool {
     let sql = format!("SELECT 1 from {} WHERE bucket_id = ? limit 1", TABLE_NAME);
-    select_one_row(conn, &sql, [bucket_id], |_| Ok(())).is_some()
+    match select_one_row(conn, &sql, [bucket_id], |_| Ok(())) {
+        Ok(r) => r.is_some(),
+        Err(e) => {
+            println!("Failed to find bucket by id: {}", e);
+            false
+        }
+    }
 }
 
 pub fn insert_item(conn: &Connection, bucket_id: i64, item: &Item) -> rusqlite::Result<i64> {

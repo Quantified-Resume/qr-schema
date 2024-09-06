@@ -8,7 +8,6 @@ name = "qr_model"
 path = "src/lib.rs"
 
 [dependencies]
-chrono = { version = "0.4.38", features = ["serde"] }
 log = "0.4.22"
 rusqlite = "0.32.1"
 rust_decimal = "1.36.0"

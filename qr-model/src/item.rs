@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -12,7 +11,7 @@ pub enum ItemType {
     Record,
 }
 
-#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub struct NamingEntity {
     id: Option<i64>,
     name: String,
@@ -25,7 +24,7 @@ pub enum RecordMetricsType {
     Amount,
 }
 
-#[derive(Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, JsonSchema, Debug)]
 pub struct RecordMetrics {
     #[serde(rename = "type")]
     type_: RecordMetricsType,
@@ -35,21 +34,18 @@ pub struct RecordMetrics {
     currency: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Item {
     pub id: Option<i64>,
     pub ref_id: String,
     #[serde(rename = "type")]
     pub type_: ItemType,
-    pub timestamp: DateTime<Utc>,
+    pub timestamp: i64,
     // Duration of item, required for EVENT
     pub duration: Option<i64>,
     pub name: Option<String>,
     pub action: String,
-    pub tags: Option<Vec<Tag>>,
-    pub place: Option<NamingEntity>,
-    pub joiners: Option<Vec<NamingEntity>>,
     // Value list of item, required for RECORD
     pub metrics: Option<Vec<RecordMetrics>>,
     pub payload: Option<Map<String, Value>>,

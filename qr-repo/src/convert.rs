@@ -1,13 +1,18 @@
-use chrono::{DateTime, NaiveDateTime, Utc};
+use dateparser::DateTimeUtc;
 use serde_json::{self, from_str, Map, Value};
 
-pub fn date_from_sql(res: rusqlite::Result<String>) -> Option<DateTime<Utc>> {
+pub fn date_from_sql(res: rusqlite::Result<String>) -> Option<i64> {
+    if res.is_err() {
+        log::error!("Failed to get col from sql: {}", res.unwrap_err());
+        return None;
+    }
     let col_val = res.unwrap();
-    let res = NaiveDateTime::parse_from_str(&col_val, "%Y-%m-%d %H:%M:%S")
-        .map(|time| DateTime::<Utc>::from_naive_utc_and_offset(time, Utc));
-    match res {
-        Ok(date) => Some(date.to_utc()),
-        Err(e) => panic!("Time parse failure {}", e),
+    match col_val.parse::<DateTimeUtc>() {
+        Ok(val) => Some(val.0.timestamp_millis()),
+        Err(e) => {
+            log::error!("Time parse failure: {}", e);
+            None
+        }
     }
 }
 

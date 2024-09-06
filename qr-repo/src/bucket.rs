@@ -1,7 +1,4 @@
-use std::{
-    str::FromStr,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::str::FromStr;
 
 use qr_model::{Bucket, BucketStatus, Builtin};
 use rusqlite::{params, Connection, Row};
@@ -32,8 +29,8 @@ fn table_def() -> Table {
     }
 }
 
-pub fn init_table(conn: &Connection) {
-    check_table_exist(conn, TABLE_NAME, table_def);
+pub fn init_table(conn: &Connection) -> rusqlite::Result<bool> {
+    check_table_exist(conn, TABLE_NAME, table_def)
 }
 
 pub fn insert_bucket(conn: &Connection, bucket: &Bucket) -> rusqlite::Result<i64> {
@@ -61,7 +58,13 @@ pub fn insert_bucket(conn: &Connection, bucket: &Bucket) -> rusqlite::Result<i64
 
 pub fn select_bucket(conn: &Connection, id: i64) -> Option<Bucket> {
     let sql = format!("SELECT * FROM {} WHERE id = :id limit 1", TABLE_NAME);
-    util::select_one_row(conn, &sql, &[(":id", &id.to_string())], map_row)
+    match util::select_one_row(conn, &sql, &[(":id", &id.to_string())], map_row) {
+        Ok(val) => val,
+        Err(e) => {
+            println!("Failed to select bucket: {}", e);
+            None
+        }
+    }
 }
 
 fn map_row(row: &Row<'_>) -> rusqlite::Result<Bucket> {
@@ -79,10 +82,8 @@ fn map_row(row: &Row<'_>) -> rusqlite::Result<Bucket> {
         desc: row.get_unwrap("desc"),
         url: row.get_unwrap("url"),
         tag: None,
-        created: Some(date_from_sql(row.get("create_time")).expect("Failed to query create_time")),
-        last_modified: Some(
-            date_from_sql(row.get("modify_time")).expect("Failed to query modify_time"),
-        ),
+        created: date_from_sql(row.get("create_time")),
+        last_modified: date_from_sql(row.get("modify_time")),
         payload: json_map_from_sql(row.get("payload")),
     })
 }
@@ -93,7 +94,7 @@ pub fn select_bucket_by_builtin(
     builtin_ref_id: Option<&str>,
 ) -> Option<Bucket> {
     let b_str = builtin.as_ref();
-    match builtin_ref_id {
+    let res = match builtin_ref_id {
         Some(ref_id) => {
             let sql = format!(
                 "SELECT * FROM {} WHERE builtin = :b and builtin_ref_id = :rid LIMIT 1",
@@ -107,6 +108,13 @@ pub fn select_bucket_by_builtin(
                 TABLE_NAME
             );
             select_one_row(conn, &sql, &[(":b", b_str)], map_row)
+        }
+    };
+    match res {
+        Ok(val) => val,
+        Err(e) => {
+            println!("Failed to select bucket by builtin: {}", e);
+            None
         }
     }
 }
@@ -126,21 +134,12 @@ pub fn select_all_buckets(conn: &Connection) -> Vec<Bucket> {
 
 pub fn update_bucket(conn: &Connection, bucket: &Bucket) -> rusqlite::Result<()> {
     let sql = format!(
-        "UPDATE {} SET modify_time = ?, name = ?, desc = ? WHERE id = ?",
+        "UPDATE {} SET modify_time = CURRENT_TIMESTAMP, name = ?, desc = ? WHERE id = ?",
         TABLE_NAME
     );
     let mut stmt = conn.prepare(&sql)?;
-    stmt.execute(params![
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis()
-            .to_string(),
-        bucket.name,
-        bucket.desc,
-        bucket.id
-    ])
-    .map(|_| ())
+    stmt.execute(params![bucket.name, bucket.desc, bucket.id])
+        .map(|_| ())
 }
 
 pub fn delete_bucket(conn: &Connection, bucket_id: i64) -> rusqlite::Result<()> {
@@ -150,11 +149,10 @@ pub fn delete_bucket(conn: &Connection, bucket_id: i64) -> rusqlite::Result<()> 
 
 #[test]
 fn test() {
-    use chrono::DateTime;
     use serde_json::{to_string, Map, Number, Value};
 
     let conn = Connection::open_in_memory().unwrap();
-    init_table(&conn);
+    let _ = init_table(&conn);
 
     let mut payload = Map::new();
     payload.insert("test".to_string(), Value::String("fff".to_string()));
@@ -172,8 +170,8 @@ fn test() {
         desc: Some("Mock description".to_string()),
         url: Some("https://qr.com".to_string()),
         tag: None,
-        created: Some(DateTime::default()),
-        last_modified: Some(DateTime::default()),
+        created: None,
+        last_modified: None,
         payload: Some(payload),
     };
     let id = insert_bucket(&conn, &bucket).unwrap();
