@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use qr_model::{Bucket, BucketStatus, Builtin};
-use rusqlite::{params, Connection, Row};
+use rusqlite::{params, Connection, Error, Result, Row};
 use serde_json;
 
 use crate::{
@@ -29,16 +29,19 @@ fn table_def() -> Table {
     }
 }
 
-pub fn init_table(conn: &Connection) -> rusqlite::Result<bool> {
+pub fn init_table(conn: &Connection) -> Result<bool> {
     check_table_exist(conn, TABLE_NAME, table_def)
 }
 
-pub fn insert_bucket(conn: &Connection, bucket: &Bucket) -> rusqlite::Result<i64> {
+pub fn insert_bucket(conn: &Connection, bucket: &Bucket) -> Result<i64> {
     let sql = format!(
         "INSERT INTO {} (no, name, status, desc, url, payload, builtin, builtin_ref_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         TABLE_NAME
     );
-    let mut statement = conn.prepare(&sql)?;
+    let mut statement = match conn.prepare(&sql) {
+        Err(e) => return Result::Err(e),
+        Ok(v) => v,
+    };
     statement
         .execute(params![
             bucket.no,
@@ -47,7 +50,10 @@ pub fn insert_bucket(conn: &Connection, bucket: &Bucket) -> rusqlite::Result<i64
             bucket.desc,
             bucket.url,
             match &bucket.payload {
-                Some(val) => serde_json::to_string(val).unwrap(),
+                Some(val) => match serde_json::to_string(val) {
+                    Ok(json) => json,
+                    Err(_) => return Result::Err(Error::InvalidColumnName("payload".to_string())),
+                },
                 None => "{}".to_string(),
             },
             bucket.builtin,
@@ -61,13 +67,13 @@ pub fn select_bucket(conn: &Connection, id: i64) -> Option<Bucket> {
     match util::select_one_row(conn, &sql, &[(":id", &id.to_string())], map_row) {
         Ok(val) => val,
         Err(e) => {
-            println!("Failed to select bucket: {}", e);
+            log::warn!("Failed to select bucket: {}", e);
             None
         }
     }
 }
 
-fn map_row(row: &Row<'_>) -> rusqlite::Result<Bucket> {
+fn map_row(row: &Row<'_>) -> Result<Bucket> {
     let builtin = str_from_sql(row.get("builtin")).and_then(|val| Builtin::from_str(&val).ok());
     let status = str_from_sql(row.get("status"))
         .and_then(|val: String| BucketStatus::from_str(&val).ok())
@@ -128,21 +134,23 @@ pub fn select_all_buckets(conn: &Connection) -> Vec<Bucket> {
         let b = map_row(row).unwrap();
         res.push(b);
     }
-
     res
 }
 
-pub fn update_bucket(conn: &Connection, bucket: &Bucket) -> rusqlite::Result<()> {
+pub fn update_bucket(conn: &Connection, bucket: &Bucket) -> Result<()> {
     let sql = format!(
         "UPDATE {} SET modify_time = CURRENT_TIMESTAMP, name = ?, desc = ? WHERE id = ?",
         TABLE_NAME
     );
-    let mut stmt = conn.prepare(&sql)?;
+    let mut stmt = match conn.prepare(&sql) {
+        Err(e) => return Result::Err(e),
+        Ok(v) => v,
+    };
     stmt.execute(params![bucket.name, bucket.desc, bucket.id])
         .map(|_| ())
 }
 
-pub fn delete_bucket(conn: &Connection, bucket_id: i64) -> rusqlite::Result<()> {
+pub fn delete_bucket(conn: &Connection, bucket_id: i64) -> Result<()> {
     let sql = format!("DELETE FROM {} where id = ?1", TABLE_NAME);
     conn.execute(&sql, [bucket_id]).map(|_| ())
 }

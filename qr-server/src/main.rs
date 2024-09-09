@@ -1,4 +1,5 @@
 pub mod controller;
+pub mod service;
 
 use std::sync::Mutex;
 

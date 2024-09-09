@@ -33,7 +33,9 @@ impl HttpErrorJson {
         }
     }
 
-    pub fn bad_req(msg: &str) -> Self {}
+    pub fn bad_req(msg: &str) -> Self {
+        HttpErrorJson::new(Status::BadRequest, msg)
+    }
 
     pub fn from_err<E>(msg: &str, err: E) -> Self
     where
@@ -55,7 +57,7 @@ impl HttpErrorJson {
         HttpErrorJson::new(Status::NotFound, "Bucket not found")
     }
 
-    pub fn bucket_is_not_enabled(id: i64) -> Self {
+    pub fn bucket_not_enabled(id: i64) -> Self {
         println!("Bucket is not enabled: id={:?}", id);
         HttpErrorJson::new(Status::BadRequest, "Bucket not enabled")
     }

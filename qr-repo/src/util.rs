@@ -15,9 +15,11 @@ where
     P: Params,
     F: FnOnce(&Row<'_>) -> rusqlite::Result<T>,
 {
-    let mut statement = conn.prepare(sql).expect("Failed to open statement");
-    let row_res = statement.query_row(params, f);
-    match row_res {
+    let mut statement = match conn.prepare(sql) {
+        Ok(v) => v,
+        Err(e) => return rusqlite::Result::Err(e),
+    };
+    match statement.query_row(params, f) {
         Ok(val) => Ok(Some(val)),
         // Ignored no row error, return None
         Err(e) => match "Query returned no rows" == e.to_string().to_string() {

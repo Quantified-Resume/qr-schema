@@ -10,7 +10,9 @@ pub use self::bucket::{
     delete_bucket, insert_bucket, select_all_buckets, select_bucket, select_bucket_by_builtin,
     update_bucket,
 };
-pub use self::item::{delete_item_by_bucket_id, exist_item_by_bucket_id, insert_item};
+pub use self::item::{
+    delete_item_by_bucket_id, exist_item_by_bucket_id, insert_item, select_item_by_bid_and_rid,
+};
 
 pub use self::initializer::init_tables;
 pub use self::sequence::{next_seq, Sequence};

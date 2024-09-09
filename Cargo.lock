@@ -1089,11 +1089,15 @@ dependencies = [
 name = "qr-server"
 version = "0.1.0"
 dependencies = [
+ "dateparser",
  "log",
  "qr-model",
  "qr-repo",
  "rocket",
  "rusqlite",
+ "rust_decimal",
+ "rust_decimal_macros",
+ "rusty-money",
  "serde",
  "serde_json",
 ]
@@ -1369,6 +1373,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rust_decimal_macros"
+version = "1.36.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da991f231869f34268415a49724c6578e740ad697ba0999199d6f22b3949332c"
+dependencies = [
+ "quote",
+ "rust_decimal",
+]
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1392,6 +1406,16 @@ name = "rustversion"
 version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "955d28af4278de8121b7ebeb796b6a45735dc01436d898801014aced2773a3d6"
+
+[[package]]
+name = "rusty-money"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b28f881005eac7ad8d46b6f075da5f322bd7f4f83a38720fc069694ddadd683"
+dependencies = [
+ "rust_decimal",
+ "rust_decimal_macros",
+]
 
 [[package]]
 name = "ryu"

@@ -1,13 +1,11 @@
-use qr_model::{Bucket, BucketStatus, Builtin, Item, ItemType, NamingEntity, RecordMetrics};
-use qr_repo::{insert_item, select_bucket, select_bucket_by_builtin};
+use super::common::HttpErrorJson;
+use crate::{controller::common::RocketState, get_conn_lock, service::create_item};
+use qr_model::{Bucket, BucketStatus, Builtin, Item};
+use qr_repo::{select_bucket, select_bucket_by_builtin};
 use rocket::{post, serde::json::Json, State};
 use rusqlite::Connection;
 use serde::Deserialize;
 use serde_json::{Map, Value};
-
-use crate::{controller::common::RocketState, get_conn_lock};
-
-use super::{bucket, common::HttpErrorJson};
 
 #[derive(Deserialize, Debug)]
 pub struct BucketKey {
@@ -19,49 +17,25 @@ pub struct BucketKey {
 #[derive(Deserialize, Debug)]
 pub struct CreateRequest {
     pub bucket: BucketKey,
-
     pub ref_id: String,
-    #[serde(rename = "type")]
-    pub type_: ItemType,
     pub timestamp: i64,
-    // Duration of item, required for EVENT
-    pub duration: Option<i64>,
     pub name: Option<String>,
     pub action: String,
-    pub place: Option<NamingEntity>,
-    pub joiners: Option<Vec<NamingEntity>>,
     // Value list of item, required for RECORD
-    pub metrics: Option<Vec<RecordMetrics>>,
+    pub metrics: Map<String, Value>,
     pub payload: Option<Map<String, Value>>,
 }
 
 impl CreateRequest {
-    pub fn to_item(&self) -> Result<Item, HttpErrorJson> {
-        let item = Item {
+    pub fn to_item(&self) -> Item {
+        Item {
             id: None,
             ref_id: self.ref_id.clone(),
-            type_: self.type_.clone(),
             timestamp: self.timestamp,
-            duration: self.duration,
             name: self.name.clone(),
             action: self.action.clone(),
             metrics: self.metrics.clone(),
             payload: self.payload.clone(),
-        };
-        match self.type_ {
-            ItemType::Event => self
-                .duration
-                .ok_or(HttpErrorJson::bad_req("Duration must not be empty"))
-                .map(|_| item),
-            ItemType::Record => self
-                .metrics
-                .clone()
-                .and_then(|v| match v.len() > 0 {
-                    true => Some(v),
-                    false => None,
-                })
-                .ok_or(HttpErrorJson::bad_req("Metrics must not be empty"))
-                .map(|_| item),
         }
     }
 }
@@ -71,25 +45,21 @@ pub fn create(
     body: Json<CreateRequest>,
     state: &State<RocketState>,
 ) -> Result<Json<i64>, HttpErrorJson> {
-    let item_res = body.to_item();
-    if item_res.is_err() {
-        return Err(item_res.unwrap_err());
-    }
-    let item = item_res.unwrap();
-
     let conn = get_conn_lock!(state.conn);
-    let bucket_res = check_bucket(&conn, &body.bucket);
-    bucket_res.and_then(|bucket| {
-        insert_item(&conn, bucket.id.unwrap(), &item)
-            .map_err(|e| HttpErrorJson::from_err("Failed to create item", e))
-            .map(|item_id| Json(item_id))
-    })
+    let bucket = match check_bucket(&conn, &body.bucket) {
+        Ok(bucket) => bucket,
+        Err(e) => return Err(e),
+    };
+    match create_item(&conn, &bucket, &body.to_item()) {
+        Ok(id) => Ok(Json(id)),
+        Err(e) => Err(HttpErrorJson::from_err(&e, e.to_string())),
+    }
 }
 
 pub fn check_bucket(conn: &Connection, key: &BucketKey) -> Result<Bucket, HttpErrorJson> {
     let bucket = match key.id {
         None => match &key.builtin {
-            None => None,
+            None => return Err(HttpErrorJson::bad_req("No bucket specified")),
             Some(val) => select_bucket_by_builtin(conn, &val, key.builtin_ref_id.as_deref()),
         },
         Some(id) => select_bucket(conn, id),
@@ -99,7 +69,7 @@ pub fn check_bucket(conn: &Connection, key: &BucketKey) -> Result<Bucket, HttpEr
         None => Err(HttpErrorJson::bucket_not_found(key.id.unwrap_or(0))),
         Some(val) => match BucketStatus::Enabled == val.status {
             true => Ok(val),
-            false => Err(HttpErrorJson::bucket_not_found(key.id.unwrap_or(0))),
+            false => Err(HttpErrorJson::bucket_not_enabled(key.id.unwrap_or(0))),
         },
     }
 }
