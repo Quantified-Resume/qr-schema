@@ -26,6 +26,12 @@ impl Builtin {
             ],
         }
     }
+
+    pub fn get_default_name(&self) -> String {
+        match self {
+            Builtin::BrowserTime => String::from("Browser Time"),
+        }
+    }
 }
 
 impl ToSql for Builtin {

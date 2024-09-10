@@ -22,6 +22,24 @@ pub struct Bucket {
     pub last_modified: Option<i64>,
     pub payload: Option<Map<String, Value>>,
 }
+impl Bucket {
+    pub fn default_builtin(builtin: Builtin, ref_id: Option<String>) -> Self {
+        Bucket {
+            id: None,
+            no: None,
+            name: builtin.get_default_name(),
+            builtin: Some(builtin),
+            builtin_ref_id: ref_id,
+            status: BucketStatus::default(),
+            desc: None,
+            url: None,
+            tag: None,
+            created: None,
+            last_modified: None,
+            payload: None,
+        }
+    }
+}
 
 impl Display for Bucket {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

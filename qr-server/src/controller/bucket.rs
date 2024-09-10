@@ -1,7 +1,7 @@
 use qr_model::{Bucket, BucketStatus, Builtin};
 use qr_repo::{
-    delete_bucket, delete_item_by_bucket_id, exist_item_by_bucket_id, insert_bucket, next_seq,
-    select_all_buckets, select_bucket, select_bucket_by_builtin, update_bucket, Sequence,
+    delete_bucket, delete_item_by_bucket_id, exist_item_by_bucket_id, select_all_buckets,
+    select_bucket, update_bucket,
 };
 use rocket::{delete, get, http::Status, post, put, serde::json::Json, State};
 use rusqlite::{Connection, TransactionBehavior};
@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use super::common::{HttpErrorJson, RocketState};
-use crate::get_conn_lock;
+use crate::{get_conn_lock, service::create_bucket};
 
 #[derive(Deserialize, Debug)]
 pub struct CreateRequest {
@@ -47,24 +47,11 @@ pub fn create(
     let request = body.into_inner();
     let mut bucket = request.to_bucket();
     let mut conn: std::sync::MutexGuard<'_, rusqlite::Connection> = get_conn_lock!(state.conn);
-    // 1. check param
-    let builtin_check =
-        check_builtin(&conn, &bucket).map_err(|msg| HttpErrorJson::new(Status::BadRequest, &msg));
-    if builtin_check.is_err() {
-        return Err(builtin_check.unwrap_err());
-    }
-    let tx_res = conn.transaction_with_behavior(TransactionBehavior::Immediate);
-    if tx_res.is_err() {
-        return Err(HttpErrorJson::sys_busy(tx_res.unwrap_err()));
-    }
-    let tx = tx_res.unwrap();
-    let res = next_seq(&tx, Sequence::Bucket)
-        .map_err(|e| HttpErrorJson::from_err("Failed to gain transaction", e))
-        .and_then(|seq| {
-            bucket.no = Some(seq);
-            insert_bucket(&tx, &bucket).map_err(|e| HttpErrorJson::from_err("Failed to save", e))
-        });
-    match res {
+    let tx = match conn.transaction_with_behavior(TransactionBehavior::Immediate) {
+        Ok(v) => v,
+        Err(e) => return Err(HttpErrorJson::sys_busy(e)),
+    };
+    match create_bucket(&tx, &mut bucket) {
         Ok(id) => tx
             .commit()
             .map_err(|e| HttpErrorJson::sys_busy(e))
@@ -72,31 +59,7 @@ pub fn create(
         Err(e) => tx
             .rollback()
             .map_err(|e| HttpErrorJson::sys_busy(e))
-            .and_then(|_| Err(e)),
-    }
-}
-
-fn check_builtin(conn: &Connection, bucket: &Bucket) -> Result<(), String> {
-    let builtin = &bucket.builtin;
-    if builtin.is_none() {
-        // Customized bucket, not check
-        return Ok(());
-    }
-    let b = builtin.clone().unwrap();
-    let ref_id = bucket.builtin_ref_id.clone();
-    let exist_one = select_bucket_by_builtin(conn, &b, ref_id.as_deref());
-    match b.is_multiple() {
-        true => match ref_id {
-            None => Err("Ref ID is required for this builtin".to_string()),
-            Some(_) => match exist_one {
-                Some(v) => Err(format!("This bucket already exists: no={}", v.no.unwrap())),
-                None => Ok(()),
-            },
-        },
-        false => match exist_one {
-            Some(v) => Err(format!("This bucket already exists: no={}", v.no.unwrap())),
-            None => Ok(()),
-        },
+            .and_then(|_| Err(HttpErrorJson::from_msg(&e))),
     }
 }
 

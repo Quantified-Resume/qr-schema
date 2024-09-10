@@ -97,7 +97,7 @@ fn map_row(row: &Row<'_>) -> Result<Bucket> {
 pub fn select_bucket_by_builtin(
     conn: &Connection,
     builtin: &Builtin,
-    builtin_ref_id: Option<&str>,
+    builtin_ref_id: Option<String>,
 ) -> Option<Bucket> {
     let b_str = builtin.as_ref();
     let res = match builtin_ref_id {
@@ -106,7 +106,7 @@ pub fn select_bucket_by_builtin(
                 "SELECT * FROM {} WHERE builtin = :b and builtin_ref_id = :rid LIMIT 1",
                 TABLE_NAME
             );
-            select_one_row(conn, &sql, &[(":b", b_str), (":rid", ref_id)], map_row)
+            select_one_row(conn, &sql, &[(":b", b_str), (":rid", &ref_id)], map_row)
         }
         None => {
             let sql = format!(
