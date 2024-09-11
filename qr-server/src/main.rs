@@ -1,19 +1,25 @@
+pub mod config;
 pub mod controller;
+pub mod err;
 pub mod service;
 
-use std::sync::Mutex;
-
 use crate::controller::register_controllers;
+use config::Config;
 use rusqlite::Connection;
+use std::sync::Mutex;
 
 #[rocket::main]
 async fn main() -> Result<(), rocket::Error> {
-    // Init
-    let conn_instance = Connection::open("test.db").expect("Failed to open database");
+    // 1. Parse config
+    let conf = Config::parse();
+    println!("Configuration={}", conf);
+    // 2. Init connection
+    let conn_instance = Connection::open(conf.db_path).expect("Failed to open database");
     qr_repo::init_tables(&conn_instance);
-    // Register web api
+    // 3. Register web api
     let conn = Mutex::new(conn_instance);
-    let rocket = register_controllers(conn);
+    let rocket_conf = rocket::Config::figment().merge(("port", conf.port));
+    let rocket = register_controllers(conn).configure(rocket_conf);
     // Launch
     rocket.launch().await?;
     Ok(())

@@ -3,7 +3,7 @@ use qr_repo::{insert_bucket, next_seq, select_bucket, select_bucket_by_builtin, 
 use rusqlite::Connection;
 use serde::Deserialize;
 
-use super::err::{cvt_err, log_err};
+use super::super::err::{cvt_err, err};
 
 pub fn create_bucket(conn: &Connection, bucket: &mut Bucket) -> Result<i64, String> {
     // 1. check bucket
@@ -12,7 +12,7 @@ pub fn create_bucket(conn: &Connection, bucket: &mut Bucket) -> Result<i64, Stri
         Ok(_) => {}
     };
     let seq = match next_seq(conn, Sequence::Bucket) {
-        Err(e) => return log_err(e, "Failed to get sequence"),
+        Err(e) => return err(e, "Failed to get sequence"),
         Ok(v) => v,
     };
     bucket.no = Some(seq);
@@ -27,7 +27,7 @@ pub fn create_builtin_bucket(
     let mut bucket = Bucket::default_builtin(builtin, ref_id);
     match create_bucket(conn, &mut bucket) {
         Ok(v) => select_bucket(conn, v).ok_or("Failed to create builtin bucket".to_string()),
-        Err(e) => log_err(e, "Failed to create builtin bucket"),
+        Err(e) => err(e, "Failed to create builtin bucket"),
     }
 }
 

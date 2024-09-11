@@ -155,6 +155,43 @@ pub fn delete_bucket(conn: &Connection, bucket_id: i64) -> Result<()> {
     conn.execute(&sql, [bucket_id]).map(|_| ())
 }
 
+pub fn select_all_ids_by_builtin(
+    conn: &Connection,
+    builtin: &Builtin,
+    ref_id: Option<&str>,
+) -> Result<Vec<i64>> {
+    let (sql, param) = match ref_id {
+        Some(v) => (
+            format!(
+                "SELECT id from {} WHERE builtin = ?1 and builtin_ref_id = ?2",
+                TABLE_NAME
+            ),
+            params![builtin, String::from(v)],
+        ),
+        None => (
+            format!("SELECT id from {} WHERE builtin = ?1", TABLE_NAME),
+            params![builtin],
+        ),
+    };
+    let mut stmt = match conn.prepare(&sql) {
+        Ok(v) => v,
+        Err(e) => return Err(e),
+    };
+    let mut rows = match stmt.query(param) {
+        Ok(v) => v,
+        Err(e) => return Err(e),
+    };
+    let mut res: Vec<i64> = Vec::new();
+    while let Some(row) = rows.next().unwrap() {
+        let id = match row.get(0) {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        };
+        res.push(id);
+    }
+    Ok(res)
+}
+
 #[test]
 fn test() {
     use serde_json::{to_string, Map, Number, Value};

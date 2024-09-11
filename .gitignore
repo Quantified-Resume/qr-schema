@@ -1,8 +1,7 @@
 .idea
 /target
-test.db*
+*.db
 qqq
-
 
 # Added by cargo
 #

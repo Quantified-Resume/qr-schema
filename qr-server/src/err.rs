@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-pub fn log_err<T, E>(err: E, msg: &str) -> Result<T, String>
+pub fn err<T, E>(err: E, msg: &str) -> Result<T, String>
 where
     E: Display,
 {
@@ -14,4 +14,12 @@ where
 {
     log::error!("{}: {}", msg, err);
     String::from(msg)
+}
+
+pub fn none<T, E>(err: E, msg: &str) -> Option<T>
+where
+    E: Display,
+{
+    log::error!("{}: {}", msg, err);
+    None
 }

@@ -1,6 +1,7 @@
 mod bucket;
 mod common;
 mod item;
+mod stat;
 
 use std::sync::Mutex;
 
@@ -22,6 +23,7 @@ pub fn register_controllers(conn: Mutex<Connection>) -> Rocket<Build> {
                 bucket::list_all,
             ],
         )
-        .mount("/api/0/item", routes![item::create]);
+        .mount("/api/0/item", routes![item::create])
+        .mount("/api/0/stat", routes![stat::stat_profile]);
     rocket
 }
