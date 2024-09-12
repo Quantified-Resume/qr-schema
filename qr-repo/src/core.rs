@@ -116,3 +116,9 @@ fn ddl(table: Table) -> String {
     );
     base
 }
+
+#[derive(Debug)]
+pub struct GroupBy {
+    pub columns: Vec<String>,
+    pub order: Option<String>,
+}

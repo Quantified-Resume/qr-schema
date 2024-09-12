@@ -1,7 +1,7 @@
 [workspace]
 members = [ 
     "qr-model", "qr-repo",
-    "qr-server",
+    "qr-server", "qr-util",
 ]
 
 resolver = "2"

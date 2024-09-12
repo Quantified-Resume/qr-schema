@@ -1,10 +1,10 @@
 use crate::{
     convert::json_map_from_sql,
-    core::{check_table_exist, Column, ColumnType, Table},
+    core::{check_table_exist, Column, ColumnType, GroupBy, Table},
     util::select_one_row,
 };
 use qr_model::Item;
-use rusqlite::{params, Connection, Row};
+use rusqlite::{params, types::Value, Connection, Row};
 use serde_json;
 
 const TABLE_NAME: &str = "item";
@@ -89,4 +89,23 @@ fn map_row(row: &Row<'_>) -> rusqlite::Result<Item> {
         metrics: json_map_from_sql(row.get("metrics")).unwrap(),
         payload: json_map_from_sql(row.get("payload")),
     })
+}
+
+#[derive(Debug)]
+pub struct QueryCommand {
+    pub columns: Vec<String>,
+    pub sql: String,
+    pub params: Vec<Value>,
+    pub group_by: Option<GroupBy>,
+}
+
+impl QueryCommand {
+    pub fn and_false() -> Self {
+        QueryCommand {
+            sql: "false".to_string(),
+            params: vec![],
+            columns: Vec::new(),
+            group_by: None,
+        }
+    }
 }

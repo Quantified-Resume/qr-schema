@@ -5,6 +5,7 @@ use std::{
 
 use clap::{arg, crate_version, Parser};
 use homedir::my_home;
+use qr_util::if_present;
 use serde::{Deserialize, Serialize};
 
 use crate::err::none;
@@ -95,13 +96,4 @@ fn merge(config: &mut Config, arg: Arg) {
     let Arg { port, db_path } = arg;
     if_present(port, |v| config.port = v);
     if_present(db_path, |v| config.db_path = v);
-}
-
-fn if_present<T, F>(opt: Option<T>, f: F)
-where
-    F: FnOnce(T) -> (),
-{
-    if opt.is_some() {
-        f(opt.unwrap());
-    }
 }

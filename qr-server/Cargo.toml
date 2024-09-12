@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 qr-model = { path = "../qr-model" }
 qr-repo = { path = "../qr-repo" }
+qr-util = { path="../qr-util" }
 
 rocket = { version = "0.5.1", features = ["json"] }
 rusqlite = "0.32.1"
@@ -18,3 +19,4 @@ rust_decimal = { version = "1.36.0", features = ["serde"] }
 rust_decimal_macros = "1.36.0"
 clap = { version = "4.5.17", features = ["cargo", "derive"] }
 homedir = "0.3.3"
+itertools = "0.13.0"
