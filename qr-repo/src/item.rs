@@ -4,8 +4,8 @@ use crate::{
     util::select_one_row,
 };
 use qr_model::Item;
-use rusqlite::{params, types::Value, Connection, Row};
-use serde_json;
+use rusqlite::{params, types::Value, Connection, Params, Row, ToSql};
+use serde_json::{self, Map};
 
 const TABLE_NAME: &str = "item";
 
@@ -93,19 +93,38 @@ fn map_row(row: &Row<'_>) -> rusqlite::Result<Item> {
 
 #[derive(Debug)]
 pub struct QueryCommand {
-    pub columns: Vec<String>,
-    pub sql: String,
+    pub clause: String,
     pub params: Vec<Value>,
-    pub group_by: Option<GroupBy>,
 }
 
 impl QueryCommand {
     pub fn and_false() -> Self {
         QueryCommand {
-            sql: "false".to_string(),
+            clause: "false".to_string(),
             params: vec![],
-            columns: Vec::new(),
-            group_by: None,
         }
     }
+}
+
+pub fn query_items(conn: &Connection, cmd: &QueryCommand) -> rusqlite::Result<Vec<Item>> {
+    let sql = format!("SELECT * from {} WHERE {}", TABLE_NAME, cmd.clause);
+    let mut stmt = match conn.prepare(&sql) {
+        Ok(v) => v,
+        Err(e) => return Err(e),
+    };
+    let ptr = std::rc::Rc::new(cmd.params);
+
+    let mut rows = match stmt.query(&[&ptr]) {
+        Ok(v) => v,
+        Err(e) => return Err(e),
+    };
+    let mut items: Vec<Item> = Vec::new();
+    while let Some(row) = rows.next().unwrap() {
+        let v = match map_row(row) {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        };
+        res.push(v);
+    }
+    Ok(items)
 }

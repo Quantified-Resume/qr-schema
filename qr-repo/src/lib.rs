@@ -12,8 +12,8 @@ pub use self::bucket::{
 };
 pub use self::core::GroupBy;
 pub use self::item::{
-    delete_item_by_bucket_id, exist_item_by_bucket_id, insert_item, select_item_by_bid_and_rid,
-    QueryCommand,
+    delete_item_by_bucket_id, exist_item_by_bucket_id, insert_item, query_items,
+    select_item_by_bid_and_rid, QueryCommand,
 };
 
 pub use self::initializer::init_tables;

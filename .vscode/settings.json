@@ -3,6 +3,7 @@
         "AUTOINCREMENT",
         "chrono",
         "dateparser",
+        "itertools",
         "rowid",
         "rusqlite",
         "schemars",

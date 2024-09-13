@@ -4,16 +4,45 @@ use crate::err::err;
 
 use super::BucketKey;
 use itertools::Itertools;
-use qr_repo::{select_all_ids_by_builtin, select_bucket, QueryCommand};
+use jsonpath::Selector;
+use qr_repo::{query_items, select_all_ids_by_builtin, select_bucket, QueryCommand};
 use qr_util::if_present;
 use rusqlite::{types::Value, Connection};
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
+pub enum FilterOp {
+    Eq,
+    Neq,
+    IsNul,
+    NotNul,
+}
+
+impl FilterOp {
+    fn to_sql(&self) -> String {
+        match self {
+            FilterOp::Eq => "=".to_string(),
+            FilterOp::Neq => "!=".to_string(),
+            FilterOp::IsNul => "IS NULL".to_string(),
+            FilterOp::NotNul => "IS NOT NULL".to_string(),
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct PayloadFilter {
+    pub path: String,
+    pub op: FilterOp,
+    pub val: serde_json::Value,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct QueryRequest {
     pub bucket: BucketKey,
     pub ts_start: Option<i64>,
     pub ts_end: Option<i64>,
+    pub payload_filter: Option<Vec<PayloadFilter>>,
 }
 
 pub fn stat_profile(conn: &Connection, req: QueryRequest) -> Result<i64, String> {
@@ -24,6 +53,13 @@ pub fn stat_profile(conn: &Connection, req: QueryRequest) -> Result<i64, String>
     let cmd = match built_cmd(bucket_ids, &req) {
         Ok(v) => v,
         Err(e) => return Err(e),
+    };
+    let items = match query_items(conn, &cmd) {
+        Ok(v) => v,
+        Err(e) => {
+            log::error!("Failed to query items: err={}", e);
+            return Err("Failed to query items".to_string());
+        }
     };
     Ok(1)
 }
@@ -58,14 +94,18 @@ fn built_cmd(bucket_ids: Vec<i64>, req: &QueryRequest) -> Result<QueryCommand, S
         p.push(Value::Integer(ts));
     });
     // 3. payload
-
+    let pf_res = match &req.payload_filter {
+        Some(v) => handle_payload_filter(v, &mut clause, &mut p, p_idx),
+        None => Ok(p_idx),
+    };
+    match pf_res {
+        Ok(new_idx) => p_idx = new_idx,
+        Err(e) => return Err(e),
+    };
     // 4. metrics
-
     Ok(QueryCommand {
-        sql: clause.join(" and "),
+        clause: clause.join(" and "),
         params: p,
-        columns: vec![],
-        group_by: None,
     })
 }
 
@@ -86,6 +126,73 @@ fn check_bucket(conn: &Connection, key: &BucketKey) -> Result<Vec<i64>, String> 
     }
 }
 
+fn handle_payload_filter(
+    pf: &Vec<PayloadFilter>,
+    clause: &mut Vec<String>,
+    p: &mut Vec<Value>,
+    idx_start: i32,
+) -> Result<i32, String> {
+    let mut idx = idx_start;
+    for f in pf {
+        let PayloadFilter { path, op, val } = f;
+        match Selector::new(&path) {
+            Ok(_) => {}
+            Err(e) => {
+                log::error!("Failed to parse json path: {:?}", e);
+                return Err(format!("Invalid json path: {}", path));
+            }
+        };
+        match op {
+            FilterOp::Eq | FilterOp::Neq => {
+                if val.is_null() || val.is_object() || val.is_array() {
+                    return Err("Invalid value type for Eq".to_string());
+                }
+                clause.push(format!(
+                    "json_extract(payload, '{}') {} ?{}",
+                    path,
+                    op.to_sql(),
+                    idx
+                ));
+                p.push(json_val_to_sql_val(&val));
+                idx += 1;
+            }
+            FilterOp::IsNul | FilterOp::NotNul => {
+                clause.push(format!("json_extract(payload, '{}') {}", path, op.to_sql()))
+            }
+        };
+    }
+    Ok(idx)
+}
+
+fn json_val_to_sql_val(json: &serde_json::Value) -> Value {
+    if json.is_null() {
+        return Value::Null;
+    } else if json.is_boolean() {
+        let v = match json.as_bool() {
+            Some(v) => match v {
+                true => 1,
+                false => 0,
+            },
+            None => 0,
+        };
+        return Value::Integer(v);
+    } else if json.is_i64() {
+        let v = match json.as_i64() {
+            Some(v) => v,
+            None => 0,
+        };
+        return Value::Integer(v);
+    } else if json.is_u64() {
+        let v = match json.as_u64() {
+            Some(v) => v,
+            None => 0,
+        };
+        return Value::Integer(v as i64);
+    } else {
+        return Value::Text(json.to_string());
+    }
+}
+
 #[test]
 pub fn test_cmg() {
     let req = QueryRequest {
@@ -96,12 +203,18 @@ pub fn test_cmg() {
         },
         ts_start: Some(1000),
         ts_end: Some(2000),
+        payload_filter: Some(vec![PayloadFilter {
+            path: "$.a.val".to_string(),
+            op: FilterOp::Eq,
+            val: serde_json::Value::String("test".to_string()),
+        }]),
     };
 
     match built_cmd(vec![10, 20], &req) {
         Ok(cmd) => {
-            assert_eq!(cmd.sql, "bucket_id in (?1, ?2) and ts >= ?3 and ts < ?4");
-            assert_eq!(cmd.params.len(), 4);
+            println!("{:?}", cmd);
+            assert_eq!(cmd.sql, "bucket_id in (?1, ?2) and ts >= ?3 and ts < ?4 and json_extract(payload, '$.a.val') = ?5");
+            assert_eq!(cmd.params.len(), 5);
         }
         Err(_) => {}
     }
