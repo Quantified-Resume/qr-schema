@@ -127,7 +127,7 @@ pub fn remove(
     }
     let tx = tx_res.unwrap();
     let res = delete_item_by_bucket_id(&tx, bucket_id).and_then(|cnt| {
-        println!("Deleted {} items of bucket[id={}]", cnt, bucket_id);
+        log::warn!("Deleted {} items of bucket[id={}]", cnt, bucket_id);
         delete_bucket(&tx, bucket_id).map(|_| ())
     });
     match res {

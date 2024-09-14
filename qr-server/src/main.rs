@@ -1,9 +1,11 @@
 pub mod config;
 pub mod controller;
 pub mod err;
+pub mod logging;
 pub mod service;
 
 use crate::controller::register_controllers;
+use crate::logging::init_logger;
 use config::Config;
 use rusqlite::Connection;
 use std::sync::Mutex;
@@ -12,7 +14,8 @@ use std::sync::Mutex;
 async fn main() -> Result<(), rocket::Error> {
     // 1. Parse config
     let conf = Config::parse();
-    println!("Configuration={}", conf);
+    // 2. init logger
+    init_logger(&conf);
     // 2. Init connection
     let conn_instance = Connection::open(conf.db_path).expect("Failed to open database");
     qr_repo::init_tables(&conn_instance);

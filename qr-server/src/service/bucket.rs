@@ -21,7 +21,7 @@ pub fn create_bucket(conn: &Connection, bucket: &mut Bucket) -> Result<i64, Stri
 
 pub fn create_builtin_bucket(
     conn: &Connection,
-    builtin: Builtin,
+    builtin: &Builtin,
     ref_id: Option<String>,
 ) -> Result<Bucket, String> {
     let mut bucket = Bucket::default_builtin(builtin, ref_id);

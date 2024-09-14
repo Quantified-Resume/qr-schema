@@ -33,7 +33,7 @@ impl FilterOp {
 pub struct PayloadFilter {
     pub path: String,
     pub op: FilterOp,
-    pub val: serde_json::Value,
+    pub val: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -45,7 +45,8 @@ pub struct QueryRequest {
     pub payload_filter: Option<Vec<PayloadFilter>>,
 }
 
-pub fn stat_profile(conn: &Connection, req: QueryRequest) -> Result<i64, String> {
+pub fn query_stat(conn: &Connection, req: QueryRequest) -> Result<i64, String> {
+    log::info!("query_stat: req={:?}", req);
     let bucket_ids = match check_bucket(conn, &req.bucket) {
         Ok(v) => v,
         Err(e) => return Err(e),
@@ -84,12 +85,12 @@ fn built_cmd(bucket_ids: Vec<i64>, req: &QueryRequest) -> Result<QueryCommand, S
     clause.push(format!("bucket_id in ({})", b_sql));
     // 2. time
     if_present(req.ts_start, |ts| {
-        clause.push(format!("ts >= ?{}", p_idx));
+        clause.push(format!("timestamp >= ?{}", p_idx));
         p_idx += 1;
         p.push(Value::Integer(ts));
     });
     if_present(req.ts_end, |ts| {
-        clause.push(format!("ts < ?{}", p_idx));
+        clause.push(format!("timestamp < ?{}", p_idx));
         p_idx += 1;
         p.push(Value::Integer(ts));
     });
@@ -98,8 +99,8 @@ fn built_cmd(bucket_ids: Vec<i64>, req: &QueryRequest) -> Result<QueryCommand, S
         Some(v) => handle_payload_filter(v, &mut clause, &mut p, p_idx),
         None => Ok(p_idx),
     };
-    match pf_res {
-        Ok(new_idx) => p_idx = new_idx,
+    let _ = match pf_res {
+        Ok(new_idx) => new_idx,
         Err(e) => return Err(e),
     };
     // 4. metrics
@@ -144,8 +145,12 @@ fn handle_payload_filter(
         };
         match op {
             FilterOp::Eq | FilterOp::Neq => {
-                if val.is_null() || val.is_object() || val.is_array() {
-                    return Err("Invalid value type for Eq".to_string());
+                let param_val = match val {
+                    Some(v) => v,
+                    None => return Err("Value can't be null".to_string()),
+                };
+                if param_val.is_null() || param_val.is_object() || param_val.is_array() {
+                    return Err("Invalid value type for Eq or Neq".to_string());
                 }
                 clause.push(format!(
                     "json_extract(payload, '{}') {} ?{}",
@@ -153,7 +158,7 @@ fn handle_payload_filter(
                     op.to_sql(),
                     idx
                 ));
-                p.push(json_val_to_sql_val(&val));
+                p.push(json_val_to_sql_val(&param_val));
                 idx += 1;
             }
             FilterOp::IsNul | FilterOp::NotNul => {
@@ -206,14 +211,13 @@ pub fn test_cmg() {
         payload_filter: Some(vec![PayloadFilter {
             path: "$.a.val".to_string(),
             op: FilterOp::Eq,
-            val: serde_json::Value::String("test".to_string()),
+            val: Some(serde_json::Value::String("test".to_string())),
         }]),
     };
 
     match built_cmd(vec![10, 20], &req) {
         Ok(cmd) => {
-            println!("{:?}", cmd);
-            assert_eq!(cmd.sql, "bucket_id in (?1, ?2) and ts >= ?3 and ts < ?4 and json_extract(payload, '$.a.val') = ?5");
+            assert_eq!(cmd.clause, "bucket_id in (?1, ?2) and ts >= ?3 and ts < ?4 and json_extract(payload, '$.a.val') = ?5");
             assert_eq!(cmd.params.len(), 5);
         }
         Err(_) => {}

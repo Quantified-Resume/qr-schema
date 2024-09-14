@@ -14,11 +14,18 @@ pub fn create_item(conn: &Connection, b_key: &BucketKey, item: &Item) -> Result<
     // 3. check not exist
     match select_item_by_bid_and_rid(conn, bid, &item.ref_id) {
         Err(e) => {
-            log::error!("Failed to query exist one: {}", e);
+            log::error!("Failed to query exist item: {}", e);
             return Err("Internal error".to_string());
         }
         Ok(item_opt) => match item_opt {
-            Some(_) => return Err("Ref ID duplicated".to_string()),
+            Some(_) => {
+                log::error!(
+                    "RefID duplicated while creating item: refId={}, bucketId={}",
+                    item.ref_id,
+                    bid
+                );
+                return Err("Ref ID duplicated".to_string());
+            }
             None => {}
         },
     };
@@ -54,10 +61,14 @@ fn get_or_create_builtin(
 ) -> Option<Bucket> {
     match select_bucket_by_builtin(conn, &builtin, ref_id.clone()) {
         Some(v) => Some(v),
-        None => match create_builtin_bucket(conn, builtin, ref_id) {
+        None => match create_builtin_bucket(conn, &builtin, ref_id) {
             Ok(v) => Some(v),
             Err(e) => {
-                log::error!("Failed to get_or_create_builtin: {}", e);
+                log::error!(
+                    "Failed to get_or_create_builtin: builtin={}, err={}",
+                    builtin,
+                    e
+                );
                 None
             }
         },

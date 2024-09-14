@@ -119,7 +119,7 @@ pub fn select_bucket_by_builtin(
     match res {
         Ok(val) => val,
         Err(e) => {
-            println!("Failed to select bucket by builtin: {}", e);
+            log::error!("Failed to select bucket by builtin: {}", e);
             None
         }
     }
@@ -194,7 +194,7 @@ pub fn select_all_ids_by_builtin(
 
 #[test]
 fn test() {
-    use serde_json::{to_string, Map, Number, Value};
+    use serde_json::{Map, Number, Value};
 
     let conn = Connection::open_in_memory().unwrap();
     let _ = init_table(&conn);
@@ -202,8 +202,6 @@ fn test() {
     let mut payload = Map::new();
     payload.insert("test".to_string(), Value::String("fff".to_string()));
     payload.insert("a1".to_string(), Value::Number(Number::from(123)));
-
-    println!("{}", to_string(&payload).unwrap());
 
     let bucket = Bucket {
         id: None,
@@ -221,7 +219,6 @@ fn test() {
     };
     let id = insert_bucket(&conn, &bucket).unwrap();
     assert!(id > 0);
-    println!("Bucket inserted: id={}", id);
 
     let mut bucket_res = select_bucket(&conn, id);
     let b = bucket_res.unwrap();
@@ -230,7 +227,6 @@ fn test() {
     assert_eq!(b.name, "foobar".to_string());
     assert_eq!(b.desc.clone().unwrap(), "Mock description".to_string());
     assert_eq!(b.url.clone().unwrap(), "https://qr.com".to_string());
-    println!("{}", b);
 
     bucket_res = select_bucket(&conn, 2);
     assert!(bucket_res.is_none());

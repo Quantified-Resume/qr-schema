@@ -14,6 +14,8 @@ use crate::err::none;
 #[clap(version = crate_version!(), author = "Sheep Zhang")]
 #[serde(rename_all = "camelCase")]
 pub struct Arg {
+    /// Environment, optional: dev, stage, prod. Default is prod
+    env: Option<String>,
     /// The port to listen
     #[arg(short, long)]
     port: Option<u16>,
@@ -22,8 +24,27 @@ pub struct Arg {
     db_path: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
+pub enum Env {
+    Dev,
+    Stage,
+    Prod,
+}
+
+impl Env {
+    fn from(str_opt: Option<String>) -> Option<Self> {
+        str_opt.and_then(|v| match v.to_lowercase().as_str() {
+            "dev" | "development" => Some(Env::Dev),
+            "stage" | "staging" | "test" | "testing" => Some(Env::Stage),
+            "prod" | "production" => Some(Env::Prod),
+            _ => None,
+        })
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
+    pub env: Env,
     pub port: u16,
     pub db_path: String,
 }
@@ -32,7 +53,6 @@ impl Config {
     /// Parse configuration from all the inputs
     pub fn parse() -> Self {
         let mut config = Config::default();
-        // [home_dir]/.qr/config.yaml
         let home_arg = parse_home_arg();
         if_present(home_arg, |a| merge(&mut config, a));
         // Cli Argument
@@ -45,10 +65,7 @@ impl Config {
 impl Display for Config {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match serde_json::to_string(&self) {
-            Ok(json_str) => {
-                write!(f, "{}", json_str)?;
-                Ok(())
-            }
+            Ok(json_str) => write!(f, "{}", json_str),
             Err(_e) => Err(Error::default()),
         }
     }
@@ -59,12 +76,14 @@ impl Config {
         // TODO: use App Data of different OS
         let db_path = String::from(".quantified_resume.db");
         Config {
+            env: Env::Dev,
             port: 12233,
             db_path,
         }
     }
 }
 
+/// Parse config from [home_dir]/.qr/config.yaml
 fn parse_home_arg() -> Option<Arg> {
     let mut dir = match my_home() {
         Ok(opt) => match opt {
@@ -85,7 +104,7 @@ fn parse_home_arg() -> Option<Arg> {
 
     match serde_json::from_reader::<File, Arg>(file) {
         Ok(v) => {
-            println!("{:?}", v);
+            log::error!("{:?}", v);
             Some(v)
         }
         Err(e) => none(e, "Failed to prase yaml config file"),
@@ -93,7 +112,8 @@ fn parse_home_arg() -> Option<Arg> {
 }
 /// Merge arg into config
 fn merge(config: &mut Config, arg: Arg) {
-    let Arg { port, db_path } = arg;
+    let Arg { port, db_path, env } = arg;
     if_present(port, |v| config.port = v);
     if_present(db_path, |v| config.db_path = v);
+    if_present(Env::from(env), |v| config.env = v);
 }

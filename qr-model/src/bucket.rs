@@ -23,12 +23,12 @@ pub struct Bucket {
     pub payload: Option<Map<String, Value>>,
 }
 impl Bucket {
-    pub fn default_builtin(builtin: Builtin, ref_id: Option<String>) -> Self {
+    pub fn default_builtin(builtin: &Builtin, ref_id: Option<String>) -> Self {
         Bucket {
             id: None,
             no: None,
             name: builtin.get_default_name(),
-            builtin: Some(builtin),
+            builtin: Some(builtin.clone()),
             builtin_ref_id: ref_id,
             status: BucketStatus::default(),
             desc: None,
@@ -44,10 +44,7 @@ impl Bucket {
 impl Display for Bucket {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match serde_json::to_string(&self) {
-            Ok(json_str) => {
-                write!(f, "{}", json_str)?;
-                Ok(())
-            }
+            Ok(json_str) => write!(f, "{}", json_str),
             Err(_e) => Err(Error::default()),
         }
     }
@@ -60,23 +57,4 @@ pub enum BucketStatus {
     #[default]
     Enabled,
     Disabled,
-}
-
-#[test]
-fn test_bucket() {
-    let bucket = Bucket {
-        id: None,
-        no: None,
-        name: "BucketName".to_string(),
-        builtin: Some(Builtin::BrowserTime),
-        builtin_ref_id: None,
-        status: BucketStatus::Enabled,
-        desc: None,
-        url: None,
-        tag: None,
-        created: None,
-        last_modified: None,
-        payload: None,
-    };
-    println!("Bucket={:?}", bucket)
 }

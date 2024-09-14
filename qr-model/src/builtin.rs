@@ -1,12 +1,12 @@
 use rusqlite::ToSql;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use strum::{AsRefStr, EnumString};
+use strum::{AsRefStr, Display, EnumString};
 
 use crate::{Metrics, MetricsValueType};
 
 // Builtin data type
-#[derive(EnumString, AsRefStr, Clone, JsonSchema, Serialize, Deserialize, Debug)]
+#[derive(EnumString, AsRefStr, Clone, JsonSchema, Serialize, Deserialize, Debug, Display)]
 pub enum Builtin {
     BrowserTime,
 }

@@ -1,11 +1,11 @@
 use crate::{
     convert::json_map_from_sql,
-    core::{check_table_exist, Column, ColumnType, GroupBy, Table},
+    core::{check_table_exist, Column, ColumnType, Table},
     util::select_one_row,
 };
 use qr_model::Item;
-use rusqlite::{params, types::Value, Connection, Params, Row, ToSql};
-use serde_json::{self, Map};
+use rusqlite::{params, params_from_iter, types::Value, Connection, Row};
+use serde_json::{self};
 
 const TABLE_NAME: &str = "item";
 
@@ -33,7 +33,7 @@ pub fn exist_item_by_bucket_id(conn: &Connection, bucket_id: i64) -> bool {
     match select_one_row(conn, &sql, [bucket_id], |_| Ok(())) {
         Ok(r) => r.is_some(),
         Err(e) => {
-            println!("Failed to find bucket by id: {}", e);
+            log::warn!("Failed to find bucket by id: {}", e);
             false
         }
     }
@@ -45,7 +45,10 @@ pub fn insert_item(conn: &Connection, bucket_id: i64, item: &Item) -> rusqlite::
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         TABLE_NAME
     );
-    let mut stmt = conn.prepare(&sql)?;
+    let mut stmt = match conn.prepare(&sql) {
+        Ok(v) => v,
+        Err(e) => return Err(e),
+    };
     stmt.execute(params![
         bucket_id,
         item.ref_id,
@@ -108,13 +111,13 @@ impl QueryCommand {
 
 pub fn query_items(conn: &Connection, cmd: &QueryCommand) -> rusqlite::Result<Vec<Item>> {
     let sql = format!("SELECT * from {} WHERE {}", TABLE_NAME, cmd.clause);
+    log::info!("QUERY ITEMS: {:?}", cmd);
     let mut stmt = match conn.prepare(&sql) {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
-    let ptr = std::rc::Rc::new(cmd.params);
-
-    let mut rows = match stmt.query(&[&ptr]) {
+    let sql_params = params_from_iter(cmd.params.clone());
+    let mut rows = match stmt.query(sql_params) {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
@@ -124,7 +127,19 @@ pub fn query_items(conn: &Connection, cmd: &QueryCommand) -> rusqlite::Result<Ve
             Ok(v) => v,
             Err(e) => return Err(e),
         };
-        res.push(v);
+        items.push(v);
     }
     Ok(items)
+}
+
+pub fn select_item_by_ref_id(
+    conn: &Connection,
+    bucket_id: i64,
+    ref_id: &str,
+) -> rusqlite::Result<Option<Item>> {
+    let sql = format!(
+        "SELECT * FROM {} WHERE bucket_id = ?1 AND ref_id = ?2",
+        TABLE_NAME
+    );
+    select_one_row(conn, &sql, params![bucket_id, ref_id], map_row)
 }

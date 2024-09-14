@@ -5,7 +5,8 @@ use crate::{
     service::{create_item, BucketKey},
 };
 use qr_model::Item;
-use rocket::{post, serde::json::Json, State};
+use qr_repo::select_item_by_ref_id;
+use rocket::{get, post, serde::json::Json, State};
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
@@ -57,5 +58,32 @@ pub fn create(
             Ok(_) => Err(HttpErrorJson::from_err(&e, e.to_string())),
             Err(txe) => Err(HttpErrorJson::sys_busy(txe)),
         },
+    }
+}
+
+#[get("/?<bid>&<rid>")]
+pub fn get_detail_by_ref_id(
+    bid: i64,
+    rid: &str,
+    state: &State<RocketState>,
+) -> Result<Json<Item>, HttpErrorJson> {
+    let conn = get_conn_lock!(state.conn);
+    match select_item_by_ref_id(&conn, bid, rid) {
+        Ok(v) => match v {
+            Some(v) => Ok(Json(v)),
+            None => {
+                log::error!("Item not found: bucket_id={}, ref_id={}", bid, rid);
+                Err(HttpErrorJson::not_found())
+            }
+        },
+        Err(e) => {
+            log::error!(
+                "Failed to query item by refId: bucket_id={}, refId={}, err={}",
+                bid,
+                rid,
+                e
+            );
+            Err(HttpErrorJson::from_err("Failed", e))
+        }
     }
 }

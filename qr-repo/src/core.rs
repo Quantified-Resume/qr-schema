@@ -70,7 +70,7 @@ pub fn check_table_exist(
         match create_table(conn, table) {
             Ok(_) => Ok(false),
             Err(e) => {
-                println!("Failed to create table: {:}", e);
+                log::error!("Failed to create table: {:}", e);
                 Err(e)
             }
         }
@@ -79,7 +79,7 @@ pub fn check_table_exist(
 
 fn create_table(conn: &Connection, table: Table) -> Result<usize, rusqlite::Error> {
     let ddl: String = ddl(table);
-    println!("{}", ddl);
+    log::info!("ddl to create table: {:?}", ddl);
     conn.execute(&ddl, params![])
 }
 
