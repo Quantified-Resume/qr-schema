@@ -1,7 +1,9 @@
+use std::str::FromStr;
+
 use qr_model::{Bucket, BucketStatus, Builtin};
 use qr_repo::{
     delete_bucket, delete_item_by_bucket_id, exist_item_by_bucket_id, select_all_buckets,
-    select_bucket, update_bucket,
+    select_bucket, update_bucket, BucketQuery,
 };
 use rocket::{delete, get, http::Status, post, put, serde::json::Json, State};
 use rusqlite::{Connection, TransactionBehavior};
@@ -63,10 +65,36 @@ pub fn create(
     }
 }
 
-#[get("/")]
-pub fn list_all(state: &State<RocketState>) -> Result<Json<Vec<Bucket>>, HttpErrorJson> {
+#[get("/?<bt>&<bt_rid>")]
+pub fn list_all(
+    bt: Option<&str>,
+    // RefId of builtin
+    bt_rid: Option<&str>,
+    state: &State<RocketState>,
+) -> Result<Json<Vec<Bucket>>, HttpErrorJson> {
+    let builtin = match bt {
+        None => None,
+        Some(s) => match Builtin::from_str(s) {
+            Ok(v) => Some(v),
+            Err(_) => {
+                log::warn!("Invalid builtin param: b={}", s);
+                return Err(HttpErrorJson::invalid_param("Invalid param: b"));
+            }
+        },
+    };
+
     let conn: std::sync::MutexGuard<'_, rusqlite::Connection> = get_conn_lock!(state.conn);
-    Ok(Json(select_all_buckets(&conn)))
+    let query = BucketQuery {
+        ref_id: bt_rid.map(String::from),
+        builtin,
+    };
+    match select_all_buckets(&conn, query) {
+        Ok(v) => Ok(Json(v)),
+        Err(e) => {
+            log::error!("Error to query all buckets: builtin={:?}", bt);
+            Err(HttpErrorJson::sys_busy(e))
+        }
+    }
 }
 
 #[get("/<bucket_id>")]

@@ -1,13 +1,14 @@
 use std::str::FromStr;
 
 use qr_model::{Bucket, BucketStatus, Builtin};
-use rusqlite::{params, Connection, Error, Result, Row};
+use qr_util::if_present;
+use rusqlite::{params, types::Value, Connection, Error, Result, Row};
 use serde_json;
 
 use crate::{
     convert::{date_from_sql, json_map_from_sql, str_from_sql},
     core::{check_table_exist, Column, ColumnType, Table},
-    util::{self, select_one_row},
+    util::{self, select_all_rows, select_one_row},
 };
 
 const TABLE_NAME: &str = "bucket";
@@ -125,16 +126,38 @@ pub fn select_bucket_by_builtin(
     }
 }
 
-pub fn select_all_buckets(conn: &Connection) -> Vec<Bucket> {
-    let sql: String = format!("SELECT * FROM {}", TABLE_NAME);
-    let mut stmt = conn.prepare(&sql).unwrap();
-    let mut rows = stmt.query([]).unwrap();
-    let mut res: Vec<Bucket> = Vec::new();
-    while let Some(row) = rows.next().unwrap() {
-        let b = map_row(row).unwrap();
-        res.push(b);
+pub struct BucketQuery {
+    pub builtin: Option<Builtin>,
+    pub ref_id: Option<String>,
+}
+
+impl BucketQuery {
+    pub fn default() -> Self {
+        return BucketQuery {
+            builtin: None,
+            ref_id: None,
+        };
     }
-    res
+}
+
+pub fn select_all_buckets(conn: &Connection, query: BucketQuery) -> rusqlite::Result<Vec<Bucket>> {
+    let mut clauses: Vec<String> = vec![String::from("true")];
+    let mut p: Vec<Value> = Vec::new();
+    let mut p_idx = 1;
+
+    let BucketQuery { builtin, ref_id } = query;
+    if_present(builtin, |v| {
+        clauses.push(format!("builtin = ?{}", p_idx));
+        p_idx += 1;
+        p.push(Value::Text(v.to_string()));
+    });
+    if_present(ref_id, |v| {
+        clauses.push(format!("builtin_ref_id = ?{}", p_idx));
+        p_idx += 1;
+        p.push(Value::Text(v));
+    });
+
+    select_all_rows(conn, TABLE_NAME, clauses, p, map_row)
 }
 
 pub fn update_bucket(conn: &Connection, bucket: &Bucket) -> Result<()> {

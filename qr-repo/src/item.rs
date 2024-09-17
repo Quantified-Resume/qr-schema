@@ -1,10 +1,10 @@
 use crate::{
     convert::json_map_from_sql,
     core::{check_table_exist, Column, ColumnType, Table},
-    util::select_one_row,
+    util::{select_all_rows, select_one_row},
 };
 use qr_model::Item;
-use rusqlite::{params, params_from_iter, types::Value, Connection, Row};
+use rusqlite::{params, types::Value, Connection, Row};
 use serde_json::{self};
 
 const TABLE_NAME: &str = "item";
@@ -94,42 +94,13 @@ fn map_row(row: &Row<'_>) -> rusqlite::Result<Item> {
     })
 }
 
-#[derive(Debug)]
-pub struct QueryCommand {
-    pub clause: String,
-    pub params: Vec<Value>,
-}
-
-impl QueryCommand {
-    pub fn and_false() -> Self {
-        QueryCommand {
-            clause: "false".to_string(),
-            params: vec![],
-        }
-    }
-}
-
-pub fn query_items(conn: &Connection, cmd: &QueryCommand) -> rusqlite::Result<Vec<Item>> {
-    let sql = format!("SELECT * from {} WHERE {}", TABLE_NAME, cmd.clause);
-    log::info!("QUERY ITEMS: {:?}", cmd);
-    let mut stmt = match conn.prepare(&sql) {
-        Ok(v) => v,
-        Err(e) => return Err(e),
-    };
-    let sql_params = params_from_iter(cmd.params.clone());
-    let mut rows = match stmt.query(sql_params) {
-        Ok(v) => v,
-        Err(e) => return Err(e),
-    };
-    let mut items: Vec<Item> = Vec::new();
-    while let Some(row) = rows.next().unwrap() {
-        let v = match map_row(row) {
-            Ok(v) => v,
-            Err(e) => return Err(e),
-        };
-        items.push(v);
-    }
-    Ok(items)
+pub fn select_all_items(
+    conn: &Connection,
+    clauses: Vec<String>,
+    params: Vec<Value>,
+) -> rusqlite::Result<Vec<Item>> {
+    log::info!("QUERY ITEMS: clauses={:?}, params={:?}", clauses, params);
+    select_all_rows(conn, TABLE_NAME, clauses, params, map_row)
 }
 
 pub fn select_item_by_ref_id(

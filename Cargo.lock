@@ -1301,6 +1301,7 @@ dependencies = [
  "dateparser",
  "log",
  "qr-model",
+ "qr-util",
  "rusqlite",
  "serde_json",
 ]

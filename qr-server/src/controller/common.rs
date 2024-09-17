@@ -60,6 +60,10 @@ impl HttpErrorJson {
     pub fn not_found() -> Self {
         HttpErrorJson::new(Status::NotFound, "Not found")
     }
+
+    pub fn invalid_param(msg: &str) -> Self {
+        HttpErrorJson::new(Status::UnprocessableEntity, msg)
+    }
 }
 
 impl<'r> Responder<'r, 'static> for HttpErrorJson {

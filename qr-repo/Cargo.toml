@@ -8,9 +8,11 @@ name = "qr_repo"
 path = "src/lib.rs"
 
 [dependencies]
+qr-model = { path = "../qr-model" }
+qr-util = { path = "../qr-util" }
+
 rusqlite = { version = "0.32.1", features = ["chrono", "serde_json"] }
 
-qr-model = { path = "../qr-model" }
 serde_json = "1.0.127"
 log = "0.4.22"
 dateparser = "0.2.1"
