@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use itertools::Itertools;
 use qr_model::{Bucket, BucketStatus, Builtin};
 use qr_repo::{
     delete_bucket, delete_item_by_bucket_id, exist_item_by_bucket_id, select_all_buckets,
@@ -10,10 +11,17 @@ use rusqlite::{Connection, TransactionBehavior};
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-use super::common::{HttpErrorJson, RocketState};
-use crate::{get_conn_lock, service::create_bucket};
+use super::{
+    common::{HttpErrorJson, RocketState},
+    item,
+};
+use crate::{
+    get_conn_lock,
+    service::{self, create_bucket},
+};
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateRequest {
     name: String,
     desc: Option<String>,
@@ -85,7 +93,7 @@ pub fn list_all(
 
     let conn: std::sync::MutexGuard<'_, rusqlite::Connection> = get_conn_lock!(state.conn);
     let query = BucketQuery {
-        ref_id: bt_rid.map(String::from),
+        ref_id: bt_rid.filter(|v| !v.is_empty()).map(String::from),
         builtin,
     };
     match select_all_buckets(&conn, query) {
@@ -110,6 +118,7 @@ pub fn get_detail(
 pub struct ModifyRequest {
     pub name: String,
     pub desc: Option<String>,
+    pub payload: Option<Map<String, Value>>,
 }
 
 #[put("/<bucket_id>", data = "<body>", format = "application/json")]
@@ -125,6 +134,7 @@ pub fn modify(
             let mut clone = exist.clone();
             clone.name = request.name;
             clone.desc = request.desc;
+            clone.payload = request.payload;
             update_bucket(&conn, &clone)
                 .map_err(|e| HttpErrorJson::from_err("Failed to save bucket", e))
         })
@@ -169,4 +179,18 @@ pub fn remove(
 
 fn check_bucket_exist(conn: &Connection, bucket_id: i64) -> Result<Bucket, HttpErrorJson> {
     select_bucket(&conn, bucket_id).ok_or(HttpErrorJson::bucket_not_found(bucket_id))
+}
+
+#[post("/<bid>/item", data = "<body>", format = "application/json")]
+pub fn batch_create_items(
+    bid: i64,
+    body: Json<Vec<item::CreateRequest>>,
+    state: &State<RocketState>,
+) -> Result<(), HttpErrorJson> {
+    let mut conn = get_conn_lock!(state.conn);
+    let items = body.0.iter().map(|r| r.to_item()).collect_vec();
+    match service::batch_create_item(&mut conn, bid, items) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(HttpErrorJson::from_msg(&e)),
+    }
 }

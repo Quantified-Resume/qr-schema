@@ -12,7 +12,8 @@ use serde_json::{Map, Value};
 
 #[derive(Deserialize, Debug)]
 pub struct CreateRequest {
-    pub bucket: BucketKey,
+    // Only required in single create
+    pub bucket: Option<BucketKey>,
     pub ref_id: String,
     pub timestamp: i64,
     pub name: Option<String>,
@@ -49,7 +50,11 @@ pub fn create(
         }
         Ok(tx) => tx,
     };
-    match create_item(&tx, &body.bucket, &body.to_item()) {
+    let bucket_key = match &body.bucket {
+        Some(v) => v,
+        None => return Err(HttpErrorJson::from_msg("Bucket key is required")),
+    };
+    match create_item(&tx, bucket_key, &body.to_item()) {
         Ok(id) => match tx.commit() {
             Ok(_) => Ok(Json(id)),
             Err(e) => Err(HttpErrorJson::sys_busy(e)),

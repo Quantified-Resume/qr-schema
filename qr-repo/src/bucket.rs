@@ -162,14 +162,21 @@ pub fn select_all_buckets(conn: &Connection, query: BucketQuery) -> rusqlite::Re
 
 pub fn update_bucket(conn: &Connection, bucket: &Bucket) -> Result<()> {
     let sql = format!(
-        "UPDATE {} SET modify_time = CURRENT_TIMESTAMP, name = ?, desc = ? WHERE id = ?",
+        "UPDATE {} SET modify_time = CURRENT_TIMESTAMP, name = ?, desc = ?, payload = ? WHERE id = ?",
         TABLE_NAME
     );
     let mut stmt = match conn.prepare(&sql) {
         Err(e) => return Result::Err(e),
         Ok(v) => v,
     };
-    stmt.execute(params![bucket.name, bucket.desc, bucket.id])
+    let payload_json = match &bucket.payload {
+        Some(val) => match serde_json::to_string(val) {
+            Ok(json) => json,
+            Err(_) => return Result::Err(Error::InvalidColumnName("payload".to_string())),
+        },
+        None => "{}".to_string(),
+    };
+    stmt.execute(params![bucket.name, bucket.desc, payload_json, bucket.id])
         .map(|_| ())
 }
 

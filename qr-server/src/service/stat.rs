@@ -55,13 +55,14 @@ pub fn query_stat(conn: &Connection, req: QueryRequest) -> Result<i64, String> {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
-    let items = match select_all_items(conn, clauses, params) {
+    let _ = match select_all_items(conn, clauses, params) {
         Ok(v) => v,
         Err(e) => {
             log::error!("Failed to query items: err={}", e);
             return Err("Failed to query items".to_string());
         }
     };
+    // TODO
     Ok(1)
 }
 

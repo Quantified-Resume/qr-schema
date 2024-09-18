@@ -60,3 +60,13 @@ pub struct BucketKey {
     pub builtin: Option<Builtin>,
     pub builtin_ref_id: Option<String>,
 }
+
+impl BucketKey {
+    pub fn new_from_id(id: i64) -> Self {
+        BucketKey {
+            id: Some(id),
+            builtin: None,
+            builtin_ref_id: None,
+        }
+    }
+}
