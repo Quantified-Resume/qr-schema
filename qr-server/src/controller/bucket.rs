@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use itertools::Itertools;
-use qr_model::{Bucket, BucketStatus, Builtin};
+use qr_model::{Bucket, BucketStatus, Builtin, Item};
 use qr_repo::{
     delete_bucket, delete_item_by_bucket_id, exist_item_by_bucket_id, select_all_buckets,
     select_bucket, update_bucket, BucketQuery,
@@ -85,7 +85,7 @@ pub fn list_all(
         Some(s) => match Builtin::from_str(s) {
             Ok(v) => Some(v),
             Err(_) => {
-                log::warn!("Invalid builtin param: b={}", s);
+                log::info!("Invalid builtin param: b={}", s);
                 return Err(HttpErrorJson::invalid_param("Invalid param: b"));
             }
         },
@@ -165,7 +165,7 @@ pub fn remove(
     }
     let tx = tx_res.unwrap();
     let res = delete_item_by_bucket_id(&tx, bucket_id).and_then(|cnt| {
-        log::warn!("Deleted {} items of bucket[id={}]", cnt, bucket_id);
+        log::info!("Deleted {} items of bucket[id={}]", cnt, bucket_id);
         delete_bucket(&tx, bucket_id).map(|_| ())
     });
     match res {
@@ -192,5 +192,17 @@ pub fn batch_create_items(
     match service::batch_create_item(&mut conn, bid, items) {
         Ok(_) => Ok(()),
         Err(e) => Err(HttpErrorJson::from_msg(&e)),
+    }
+}
+
+#[get("/<bid>/item", format = "application/json")]
+pub fn list_all_items(
+    bid: i64,
+    state: &State<RocketState>,
+) -> Result<Json<Vec<Item>>, HttpErrorJson> {
+    let conn = get_conn_lock!(state.conn);
+    match service::list_item_by_bucket_id(&conn, bid) {
+        Ok(v) => Ok(Json(v)),
+        Err(msg) => Err(HttpErrorJson::from_msg(&msg)),
     }
 }

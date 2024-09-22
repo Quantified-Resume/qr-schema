@@ -40,6 +40,7 @@ pub fn exist_item_by_bucket_id(conn: &Connection, bucket_id: i64) -> bool {
 }
 
 pub fn insert_item(conn: &Connection, bucket_id: i64, item: &Item) -> rusqlite::Result<i64> {
+    log::debug!("Insert item: {:?}", item);
     let sql = format!(
         "INSERT INTO {} (bucket_id, ref_id, timestamp, name, action, metrics, payload) \
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",

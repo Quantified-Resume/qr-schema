@@ -22,6 +22,7 @@ pub fn register_controllers(conn: Mutex<Connection>) -> Rocket<Build> {
                 bucket::get_detail,
                 bucket::list_all,
                 bucket::batch_create_items,
+                bucket::list_all_items,
             ],
         )
         .mount(

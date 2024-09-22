@@ -11,6 +11,7 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateRequest {
     // Only required in single create
     pub bucket: Option<BucketKey>,

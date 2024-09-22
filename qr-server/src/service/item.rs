@@ -1,5 +1,10 @@
+use std::vec;
+
 use qr_model::{Bucket, BucketStatus, Builtin, Item};
-use qr_repo::{insert_item, select_bucket, select_bucket_by_builtin, select_item_by_bid_and_rid};
+use qr_repo::{
+    insert_item, select_all_items, select_bucket, select_bucket_by_builtin,
+    select_item_by_bid_and_rid,
+};
 use rusqlite::Connection;
 
 use super::{bucket::create_builtin_bucket, check_metrics, BucketKey};
@@ -11,10 +16,15 @@ pub fn create_item(conn: &Connection, b_key: &BucketKey, item: &Item) -> Result<
         Err(e) => return Err(e),
     };
     // 2. create
-    create_item_inner(conn, &bucket, &mut item.clone())
+    create_item_inner(conn, &bucket, &mut item.clone(), false)
 }
 
-fn create_item_inner(conn: &Connection, bucket: &Bucket, item: &mut Item) -> Result<i64, String> {
+fn create_item_inner(
+    conn: &Connection,
+    bucket: &Bucket,
+    item: &mut Item,
+    ignore_exist: bool,
+) -> Result<i64, String> {
     // 1. check builtin
     let bid = match check_builtin(bucket, item) {
         Err(e) => return Err(e),
@@ -27,15 +37,18 @@ fn create_item_inner(conn: &Connection, bucket: &Bucket, item: &mut Item) -> Res
             return Err("Internal error".to_string());
         }
         Ok(item_opt) => match item_opt {
-            Some(_) => {
-                log::error!(
-                    "RefID duplicated while creating item: refId={}, bucketId={}",
-                    item.ref_id,
-                    bid
-                );
-                return Err("Ref ID duplicated".to_string());
-            }
             None => {}
+            Some(exist) => match ignore_exist {
+                true => return Ok(exist.id.unwrap()),
+                false => {
+                    log::error!(
+                        "RefID duplicated while creating item: refId={}, bucketId={}",
+                        item.ref_id,
+                        bid
+                    );
+                    return Err("Ref ID duplicated".to_string());
+                }
+            },
         },
     };
     // 3. insert
@@ -60,7 +73,7 @@ pub fn batch_create_item(conn: &mut Connection, bid: i64, items: Vec<Item>) -> R
         }
     };
     for item in &items {
-        match create_item_inner(&tx, &bucket, &mut item.clone()) {
+        match create_item_inner(&tx, &bucket, &mut item.clone(), true) {
             Ok(_) => {}
             Err(e) => {
                 match tx.rollback() {
@@ -136,4 +149,22 @@ pub fn check_builtin(bucket: &Bucket, item: &mut Item) -> Result<i64, String> {
         }
     };
     Ok(bid)
+}
+
+pub fn list_item_by_bucket_id(conn: &Connection, bid: i64) -> Result<Vec<Item>, String> {
+    match select_all_items(
+        conn,
+        vec![format!("bucket_id = ?1")],
+        vec![rusqlite::types::Value::Integer(bid)],
+    ) {
+        Ok(v) => Ok(v),
+        Err(e) => {
+            log::error!(
+                "Error occurred when listing items of bucket: {:?}, bid={}",
+                e,
+                bid
+            );
+            Err("Failed to query items".to_string())
+        }
+    }
 }
