@@ -97,6 +97,10 @@ fn built_clauses_and_params(
 fn check_bucket(conn: &Connection, key: &BucketKey) -> Result<Vec<i64>, String> {
     let bucket_ids = match key.id {
         Some(id) => select_bucket(conn, id)
+            .map_err(|e| {
+                log::error!("Errored to find bucket: id={}, e={}", id, e);
+                "Errored to find bucket".to_string()
+            })?
             .ok_or("Bucket not found".to_string())
             .map(|_| vec![id])?,
         None => {

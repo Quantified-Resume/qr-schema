@@ -55,29 +55,21 @@ pub fn check_table_exist(
     table_f: fn() -> Table,
 ) -> rusqlite::Result<bool> {
     let sql = "SELECT count(`name`) from `sqlite_master` WHERE `type` = 'table' AND name = ?";
-    let mut stmt = match conn.prepare(sql) {
-        Ok(v) => v,
-        Err(e) => return Err(e),
-    };
-    let res = stmt.query_row(params![table_name], |row| {
-        row.get(0) as rusqlite::Result<i32>
-    });
-    res.and_then(|exist| {
-        if exist > 0 {
-            return Ok(true);
-        }
-        let table = table_f();
-        match create_table(conn, table) {
-            Ok(_) => Ok(false),
-            Err(e) => {
-                log::error!("Failed to create table: {:}", e);
-                Err(e)
-            }
-        }
+    let mut stmt = conn.prepare(sql)?;
+    let count: i32 = stmt.query_row(params![table_name], |row| row.get(0))?;
+
+    if count > 0 {
+        return Ok(true);
+    }
+
+    let table = table_f();
+    create_table(conn, table).map(|_| false).map_err(|e| {
+        log::error!("Failed to create table: {:}", e);
+        e
     })
 }
 
-fn create_table(conn: &Connection, table: Table) -> Result<usize, rusqlite::Error> {
+fn create_table(conn: &Connection, table: Table) -> rusqlite::Result<usize> {
     let ddl: String = ddl(table);
     log::info!("ddl to create table: {:?}", ddl);
     conn.execute(&ddl, params![])
@@ -97,7 +89,6 @@ fn col_ddl(column: &Column) -> String {
         Some(val) => ddl.push_str(&format!(" DEFAULT {}", val)),
         None => {}
     }
-    if column.default_val.is_some() {};
     ddl
 }
 

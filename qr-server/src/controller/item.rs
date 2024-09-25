@@ -45,10 +45,9 @@ pub fn create(
 ) -> Result<Json<i64>, HttpErrorJson> {
     let mut conn = get_conn_lock!(state.conn);
     let tx = conn.transaction().map_err(|e| HttpErrorJson::sys_busy(e))?;
-    let bucket_key = body
-        .bucket
-        .clone()
-        .ok_or(HttpErrorJson::from_msg("Bucket key is required"))?;
+    let bucket_key = body.bucket.clone().ok_or(HttpErrorJson::from_msg(
+        "Bucket key is required".to_string(),
+    ))?;
     match create_item(&tx, &bucket_key, &body.to_item()) {
         Ok(id) => tx
             .commit()

@@ -33,8 +33,8 @@ impl HttpErrorJson {
         }
     }
 
-    pub fn from_msg(msg: &str) -> Self {
-        HttpErrorJson::new(Status::InternalServerError, msg)
+    pub fn from_msg(msg: String) -> Self {
+        HttpErrorJson::new(Status::InternalServerError, &msg)
     }
 
     pub fn from_err<E>(msg: &str, err: E) -> Self
@@ -50,11 +50,6 @@ impl HttpErrorJson {
         E: Debug,
     {
         HttpErrorJson::from_err("System is busy, please try it later", err)
-    }
-
-    pub fn bucket_not_found(id: i64) -> Self {
-        log::warn!("Bucket not found: id={:?}", id);
-        HttpErrorJson::new(Status::NotFound, "Bucket not found")
     }
 
     pub fn not_found() -> Self {

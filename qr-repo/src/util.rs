@@ -15,18 +15,16 @@ where
     P: Params,
     F: FnOnce(&Row<'_>) -> rusqlite::Result<T>,
 {
-    let mut statement = match conn.prepare(sql) {
-        Ok(v) => v,
-        Err(e) => return rusqlite::Result::Err(e),
-    };
-    match statement.query_row(params, f) {
-        Ok(val) => Ok(Some(val)),
+    let mut stmt = conn.prepare(sql)?;
+    let opt = match stmt.query_row(params, f) {
+        Ok(val) => Some(val),
         // Ignored no row error, return None
         Err(e) => match "Query returned no rows" == e.to_string().to_string() {
-            true => Ok(None),
-            false => Err(e),
+            true => None,
+            false => return Err(e),
         },
-    }
+    };
+    Ok(opt)
 }
 
 pub fn select_all_rows<T, F>(
@@ -47,23 +45,13 @@ where
         real_clauses.join(" AND ")
     );
 
-    let mut stmt = match conn.prepare(&sql) {
-        Ok(v) => v,
-        Err(e) => return Err(e),
-    };
+    let mut stmt = conn.prepare(&sql)?;
 
     let sql_params = params_from_iter(params);
-    let mut rows = match stmt.query(sql_params) {
-        Ok(v) => v,
-        Err(e) => return Err(e),
-    };
+    let mut rows = stmt.query(sql_params)?;
     let mut res: Vec<T> = Vec::new();
-    while let Some(row) = rows.next().unwrap() {
-        let v = match f(row) {
-            Ok(v) => v,
-            Err(e) => return Err(e),
-        };
-        res.push(v);
+    while let Some(row) = rows.next()? {
+        res.push(f(row)?);
     }
     Ok(res)
 }

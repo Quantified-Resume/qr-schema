@@ -1,9 +1,13 @@
-use qr_model::{Bucket, Builtin};
-use qr_repo::{insert_bucket, next_seq, select_bucket, select_bucket_by_builtin, Sequence};
-use rusqlite::Connection;
-use serde::Deserialize;
+use crate::service::err::sys_busy;
 
-use super::super::err::{cvt_err, err};
+use super::super::err::cvt_err;
+use qr_model::{Bucket, Builtin};
+use qr_repo::{
+    delete_bucket, delete_item_by_bucket_id, exist_item_by_bucket_id, insert_bucket, next_seq,
+    select_bucket, select_bucket_by_builtin, Sequence,
+};
+use rusqlite::{Connection, TransactionBehavior};
+use serde::Deserialize;
 
 pub fn create_bucket(conn: &Connection, bucket: &mut Bucket) -> Result<i64, String> {
     // 1. check bucket
@@ -19,22 +23,35 @@ pub fn create_builtin_bucket(
     ref_id: Option<String>,
 ) -> Result<Bucket, String> {
     let mut bucket = Bucket::default_builtin(builtin, ref_id);
-    match create_bucket(conn, &mut bucket) {
-        Ok(v) => select_bucket(conn, v).ok_or("Failed to create builtin bucket".to_string()),
-        Err(e) => err(e, "Failed to create builtin bucket"),
-    }
+    let id = create_bucket(conn, &mut bucket)?;
+    select_bucket_inner(conn, id)?.ok_or("Failed to create builtin bucket".to_string())
 }
 
 fn check_builtin(conn: &Connection, bucket: &Bucket) -> Result<(), String> {
-    let builtin = match &bucket.builtin {
-        None => return Ok(()),
+    let Bucket {
+        builtin,
+        builtin_ref_id,
+        ..
+    } = bucket;
+    if builtin.is_none() {
+        return Ok(());
+    }
+    let b = match builtin {
         Some(b) => b,
+        None => return Ok(()),
     };
 
-    let ref_id = bucket.builtin_ref_id.clone();
-    let exist_one = select_bucket_by_builtin(conn, &builtin, ref_id.clone());
-    match builtin.is_multiple() {
-        true => match ref_id {
+    let exist_one = select_bucket_by_builtin(conn, b, builtin_ref_id.clone()).map_err(|e| {
+        log::error!(
+            "Errored fo select bucket by builtin: e={}, b={}, ref_id={:?}",
+            e,
+            b,
+            builtin_ref_id.clone()
+        );
+        "Errored to query bucket".to_string()
+    })?;
+    match b.is_multiple() {
+        true => match builtin_ref_id {
             None => Err("Ref ID is required for this builtin".to_string()),
             Some(_) => match exist_one {
                 Some(v) => Err(format!("This bucket already exists: no={}", v.no.unwrap())),
@@ -66,7 +83,44 @@ impl BucketKey {
 }
 
 pub fn list_series_by_bucket_id(conn: &Connection, id: i64) -> Result<(), String> {
-    let bucket = select_bucket(&conn, id).ok_or("Bucket not found".to_string())?;
-
+    let _bucket = select_bucket_inner(conn, id)?.ok_or("Bucket not found".to_string())?;
+    // TODO
     Ok(())
+}
+
+fn select_bucket_inner(conn: &Connection, id: i64) -> Result<Option<Bucket>, String> {
+    select_bucket(&conn, id).map_err(|e| {
+        log::error!("Errored to query bucket: e={}, id={}", e, id);
+        "Errored to query bucket".to_string()
+    })
+}
+
+pub fn remove_bucket(conn: &mut Connection, id: i64, force: bool) -> Result<(), String> {
+    check_bucket_exist(&conn, id)?;
+
+    let exist_items = exist_item_by_bucket_id(&conn, id).map_err(|e| {
+        log::error!("Failed to find bucket by id: err={}, id={}", e, id);
+        "Failed to find bucket by id".to_string()
+    })?;
+    if exist_items && !force {
+        return Err("Can't delete bucket with items".to_string());
+    }
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(sys_busy)?;
+    let res = delete_item_by_bucket_id(&tx, id).and_then(|cnt| {
+        log::info!("Deleted {} items of bucket: id={}", cnt, id);
+        delete_bucket(&tx, id)
+    });
+    match res {
+        Ok(_) => {
+            log::info!("Deleted bucket: id={}", id);
+            tx.commit().map_err(sys_busy)
+        }
+        Err(e) => tx.rollback().and_then(|_| Err(e)).map_err(sys_busy),
+    }
+}
+
+pub fn check_bucket_exist(conn: &Connection, id: i64) -> Result<Bucket, String> {
+    select_bucket_inner(conn, id)?.ok_or("Bucket not found".to_string())
 }

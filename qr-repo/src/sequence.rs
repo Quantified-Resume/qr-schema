@@ -1,9 +1,8 @@
-use rusqlite::{params, Connection};
-
 use crate::{
     core::{check_table_exist, Column, ColumnType, Table},
     util::select_one_row,
 };
+use rusqlite::{params, Connection};
 
 const TABLE_NAME: &str = "sequence";
 
@@ -48,40 +47,35 @@ fn seq_config(seq: Sequence) -> SequenceConf {
     }
 }
 
-fn init_seq(conn: &Connection, conf: &SequenceConf) {
+fn init_seq(conn: &Connection, conf: &SequenceConf) -> Result<usize, rusqlite::Error> {
     let sql = format!(
         "INSERT INTO {} (key, value, step) VALUES (?, ?, ?)",
         TABLE_NAME
     );
     conn.execute(&sql, params![conf.key, conf.initial, conf.step])
-        .expect("Failed to init sequence");
 }
 
 pub fn next_seq(conn: &Connection, sequence: Sequence) -> rusqlite::Result<i64> {
     let conf = seq_config(sequence);
 
     let sql: String = format!("SELECT value, step FROM {} WHERE key = :key", TABLE_NAME);
-    let exist_res = select_one_row(conn, &sql, &[(":key", &conf.key)], |row| {
+    let exist = select_one_row(conn, &sql, &[(":key", &conf.key)], |row| {
         let value_cell: Result<i64, rusqlite::Error> = row.get(0);
         let step_cell: Result<i64, rusqlite::Error> = row.get(1);
         value_cell.and_then(|value| step_cell.map(|step| (value, step)))
-    });
-    if exist_res.is_err() {
-        return Err(exist_res.unwrap_err());
-    }
-    let exist = exist_res.unwrap();
+    })?;
     match exist {
         Some((val, step)) => {
             let sql = format!(
                 "UPDATE {} SET value = value + step where value = ? and key = ?",
                 TABLE_NAME
             );
-            conn.prepare(&sql)
-                .and_then(|mut s| s.execute(params![val, conf.key]))
-                .and_then(|_| Ok(val + step))
+            let mut stmt = conn.prepare(&sql)?;
+            stmt.execute(params![val, conf.key])?;
+            Ok(val + step)
         }
         None => {
-            init_seq(conn, &conf);
+            init_seq(conn, &conf)?;
             Ok(conf.initial)
         }
     }

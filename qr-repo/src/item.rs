@@ -41,19 +41,20 @@ pub fn insert_item(conn: &Connection, bucket_id: i64, item: &Item) -> rusqlite::
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         TABLE_NAME
     );
-    let mut stmt = match conn.prepare(&sql) {
-        Ok(v) => v,
-        Err(e) => return Err(e),
-    };
+    let mut stmt = conn.prepare(&sql)?;
     stmt.execute(params![
         bucket_id,
         item.ref_id,
         item.timestamp,
         item.name,
         item.action,
-        serde_json::to_string(&item.metrics).unwrap(),
+        serde_json::to_string(&item.metrics)
+            .map_err(|_| rusqlite::Error::InvalidColumnName("Invalid metrics value".to_string()))?,
         match &item.payload {
-            Some(payload) => serde_json::to_string(payload).unwrap(),
+            Some(payload) =>
+                serde_json::to_string(payload).map_err(|_| rusqlite::Error::InvalidColumnName(
+                    "Invalid payload value".to_string()
+                ))?,
             None => "{}".to_string(),
         },
     ])
@@ -80,12 +81,14 @@ pub fn select_item_by_bid_and_rid(
 
 fn map_row(row: &Row<'_>) -> rusqlite::Result<Item> {
     Ok(Item {
-        id: row.get_unwrap("id"),
-        ref_id: row.get_unwrap("ref_id"),
-        timestamp: row.get_unwrap("timestamp"),
-        name: row.get_unwrap("name"),
-        action: row.get_unwrap("action"),
-        metrics: json_map_from_sql(row.get("metrics")).unwrap(),
+        id: row.get("id")?,
+        ref_id: row.get("ref_id")?,
+        timestamp: row.get("timestamp")?,
+        name: row.get("name")?,
+        action: row.get("action")?,
+        metrics: json_map_from_sql(row.get("metrics")).ok_or(
+            rusqlite::Error::InvalidColumnName("metrics is none".to_string()),
+        )?,
         payload: json_map_from_sql(row.get("payload")),
     })
 }

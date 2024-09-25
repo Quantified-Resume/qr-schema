@@ -79,14 +79,25 @@ pub fn batch_create_item(conn: &mut Connection, bid: i64, items: Vec<Item>) -> R
 }
 
 fn check_bucket(conn: &Connection, key: &BucketKey) -> Result<Bucket, String> {
-    let bucket_opt = match key.id {
-        Some(id) => select_bucket(conn, id),
-        None => match &key.builtin {
-            None => return Err("No bucket specified".to_string()),
-            Some(val) => get_or_create_builtin(conn, val.clone(), key.builtin_ref_id.clone()),
-        },
-    };
-    let bucket = bucket_opt.ok_or("Bucket not found".to_string())?;
+    let BucketKey {
+        id,
+        builtin,
+        builtin_ref_id,
+        ..
+    } = key;
+    let bucket = match id {
+        Some(v) => select_bucket(conn, *v)
+            .map_err(|e| {
+                log::error!("Errored to query bucket: e={}, id={}", e, v);
+                "Errored to query bucket".to_string()
+            })?
+            .ok_or("Bucket not found".to_string()),
+        None => {
+            let b = builtin.clone().ok_or("No bucket specified".to_string())?;
+            get_or_create_builtin(conn, b.clone(), builtin_ref_id.clone())
+        }
+    }?;
+
     if BucketStatus::Enabled != bucket.status {
         Ok(bucket)
     } else {
@@ -98,21 +109,26 @@ fn get_or_create_builtin(
     conn: &Connection,
     builtin: Builtin,
     ref_id: Option<String>,
-) -> Option<Bucket> {
-    let exist = select_bucket_by_builtin(conn, &builtin, ref_id.clone());
-    if exist.is_some() {
-        return exist;
-    }
-    match create_builtin_bucket(conn, &builtin, ref_id) {
-        Ok(v) => Some(v),
-        Err(e) => {
+) -> Result<Bucket, String> {
+    let exist = select_bucket_by_builtin(conn, &builtin, ref_id.clone()).map_err(|e| {
+        log::error!(
+            "Errored to select bucket by builtin:e={}, builtin={:?}, ref_id={:?}",
+            e,
+            builtin,
+            ref_id.clone(),
+        );
+        "Errored to find buckets".to_string()
+    })?;
+    match exist {
+        Some(v) => Ok(v),
+        None => create_builtin_bucket(conn, &builtin, ref_id).map_err(|e| {
             log::error!(
                 "Failed to get_or_create_builtin: builtin={}, err={}",
                 builtin,
                 e
             );
-            None
-        }
+            "Errored to find buckets".to_string()
+        }),
     }
 }
 
