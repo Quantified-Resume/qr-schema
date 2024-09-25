@@ -1,7 +1,3 @@
-use std::vec;
-
-use crate::err::err;
-
 use super::BucketKey;
 use itertools::Itertools;
 use jsonpath::Selector;
@@ -9,6 +5,7 @@ use qr_repo::{select_all_ids_by_builtin, select_all_items, select_bucket};
 use qr_util::if_present;
 use rusqlite::{types::Value, Connection};
 use serde::Deserialize;
+use std::vec;
 
 #[derive(Deserialize, Debug)]
 pub enum FilterOp {
@@ -47,21 +44,12 @@ pub struct QueryRequest {
 
 pub fn query_stat(conn: &Connection, req: QueryRequest) -> Result<i64, String> {
     log::info!("query_stat: req={:?}", req);
-    let bucket_ids = match check_bucket(conn, &req.bucket) {
-        Ok(v) => v,
-        Err(e) => return Err(e),
-    };
-    let (clauses, params) = match built_clauses_and_params(bucket_ids, &req) {
-        Ok(v) => v,
-        Err(e) => return Err(e),
-    };
-    let _ = match select_all_items(conn, clauses, params) {
-        Ok(v) => v,
-        Err(e) => {
-            log::error!("Failed to query items: err={}", e);
-            return Err("Failed to query items".to_string());
-        }
-    };
+    let bucket_ids = check_bucket(conn, &req.bucket)?;
+    let (clauses, params) = built_clauses_and_params(bucket_ids, &req)?;
+    let _data = select_all_items(conn, clauses, params).map_err(|e| {
+        log::error!("Failed to query items: err={}", e);
+        "Failed to query items".to_string()
+    })?;
     // TODO
     Ok(1)
 }
@@ -99,32 +87,30 @@ fn built_clauses_and_params(
         params.push(Value::Integer(ts));
     });
     // 3. payload
-    let pf_res = match &req.payload_filter {
+    let _new_p_idx = match &req.payload_filter {
         Some(v) => handle_payload_filter(v, &mut clauses, &mut params, p_idx),
         None => Ok(p_idx),
-    };
-    let _ = match pf_res {
-        Ok(new_idx) => new_idx,
-        Err(e) => return Err(e),
-    };
+    }?;
     Ok((clauses, params))
 }
 
 fn check_bucket(conn: &Connection, key: &BucketKey) -> Result<Vec<i64>, String> {
-    let bucket_ids_res = match key.id {
-        Some(id) => match select_bucket(conn, id) {
-            Some(_) => return Ok(vec![id]),
-            None => return Err("Bucket not found".to_string()),
-        },
-        None => match &key.builtin {
-            Some(v) => select_all_ids_by_builtin(conn, v, key.builtin_ref_id.as_deref()),
-            None => return Err("Invalid bucket key".to_string()),
-        },
+    let bucket_ids = match key.id {
+        Some(id) => select_bucket(conn, id)
+            .ok_or("Bucket not found".to_string())
+            .map(|_| vec![id])?,
+        None => {
+            let b = &key
+                .builtin
+                .clone()
+                .ok_or("Invalid bucket key".to_string())?;
+            select_all_ids_by_builtin(conn, b, key.builtin_ref_id.as_deref()).map_err(|e| {
+                log::error!("Failed to select ids by builtin: e={}, builtin={:?}", e, b);
+                "Failed to select all ids by builtin".to_string()
+            })?
+        }
     };
-    match bucket_ids_res {
-        Ok(ids) => Ok(ids),
-        Err(e) => err(e, "Failed to find buckets"),
-    }
+    Ok(bucket_ids)
 }
 
 fn handle_payload_filter(
@@ -136,19 +122,13 @@ fn handle_payload_filter(
     let mut idx = idx_start;
     for f in pf {
         let PayloadFilter { path, op, val } = f;
-        match Selector::new(&path) {
-            Ok(_) => {}
-            Err(e) => {
-                log::error!("Failed to parse json path: {:?}", e);
-                return Err(format!("Invalid json path: {}", path));
-            }
-        };
+        Selector::new(&path).map_err(|e| {
+            log::error!("Failed to parse json path: {:?}", e);
+            return format!("Invalid json path: {}", path);
+        })?;
         match op {
             FilterOp::Eq | FilterOp::Neq => {
-                let param_val = match val {
-                    Some(v) => v,
-                    None => return Err("Value can't be null".to_string()),
-                };
+                let param_val = val.clone().ok_or("Value can't be null".to_string())?;
                 if param_val.is_null() || param_val.is_object() || param_val.is_array() {
                     return Err("Invalid value type for Eq or Neq".to_string());
                 }
@@ -173,19 +153,16 @@ fn json_val_to_sql_val(json: &serde_json::Value) -> Value {
     if json.is_null() {
         return Value::Null;
     } else if json.is_boolean() {
-        let v = match json.as_bool() {
-            Some(v) => match v {
+        let v = json
+            .as_bool()
+            .map(|v| match v {
                 true => 1,
                 false => 0,
-            },
-            None => 0,
-        };
+            })
+            .unwrap_or(0);
         return Value::Integer(v);
     } else if json.is_i64() {
-        let v = match json.as_i64() {
-            Some(v) => v,
-            None => 0,
-        };
+        let v = json.as_i64().unwrap_or(0);
         return Value::Integer(v);
     } else if json.is_u64() {
         let v = match json.as_u64() {

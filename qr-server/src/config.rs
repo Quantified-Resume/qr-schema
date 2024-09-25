@@ -1,14 +1,12 @@
-use std::{
-    fmt::{Display, Error},
-    fs::File,
-};
-
+use crate::err::{none, or_none};
 use clap::{arg, crate_version, Parser};
 use homedir::my_home;
 use qr_util::if_present;
 use serde::{Deserialize, Serialize};
-
-use crate::err::none;
+use std::{
+    fmt::{Display, Error},
+    fs::File,
+};
 
 #[derive(Parser, Deserialize, Debug)]
 #[clap(version = crate_version!(), author = "Sheep Zhang")]
@@ -86,10 +84,7 @@ impl Config {
 /// Parse config from [home_dir]/.qr/config.yaml
 fn parse_home_arg() -> Option<Arg> {
     let mut dir = match my_home() {
-        Ok(opt) => match opt {
-            Some(v) => v,
-            None => return None,
-        },
+        Ok(opt) => opt?,
         Err(e) => return none(e, "Failed to get home dir path"),
     };
     dir.push(".qr");
@@ -97,19 +92,13 @@ fn parse_home_arg() -> Option<Arg> {
     if !dir.exists() {
         return None;
     }
-    let file = match File::open(dir) {
-        Ok(v) => v,
-        Err(e) => return none(e, "Failed to open config file"),
-    };
-
-    match serde_json::from_reader::<File, Arg>(file) {
-        Ok(v) => {
-            log::error!("{:?}", v);
-            Some(v)
-        }
-        Err(e) => none(e, "Failed to prase yaml config file"),
-    }
+    let file = or_none(File::open(dir), "Failed to open config file")?;
+    or_none(
+        serde_json::from_reader::<File, Arg>(file),
+        "Failed to prase yaml config file",
+    )
 }
+
 /// Merge arg into config
 fn merge(config: &mut Config, arg: Arg) {
     let Arg { port, db_path, env } = arg;

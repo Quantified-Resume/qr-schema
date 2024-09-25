@@ -7,14 +7,8 @@ use super::super::err::{cvt_err, err};
 
 pub fn create_bucket(conn: &Connection, bucket: &mut Bucket) -> Result<i64, String> {
     // 1. check bucket
-    match check_builtin(conn, bucket) {
-        Err(e) => return Err(e),
-        Ok(_) => {}
-    };
-    let seq = match next_seq(conn, Sequence::Bucket) {
-        Err(e) => return err(e, "Failed to get sequence"),
-        Ok(v) => v,
-    };
+    check_builtin(conn, bucket)?;
+    let seq = next_seq(conn, Sequence::Bucket).map_err(|e| cvt_err(e, "Failed to get sequence"))?;
     bucket.no = Some(seq);
     insert_bucket(conn, &bucket).map_err(|e| cvt_err(e, "Failed to save bucket"))
 }
@@ -54,7 +48,7 @@ fn check_builtin(conn: &Connection, bucket: &Bucket) -> Result<(), String> {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct BucketKey {
     pub id: Option<i64>,
     pub builtin: Option<Builtin>,
@@ -69,4 +63,10 @@ impl BucketKey {
             builtin_ref_id: None,
         }
     }
+}
+
+pub fn list_series_by_bucket_id(conn: &Connection, id: i64) -> Result<(), String> {
+    let bucket = select_bucket(&conn, id).ok_or("Bucket not found".to_string())?;
+
+    Ok(())
 }

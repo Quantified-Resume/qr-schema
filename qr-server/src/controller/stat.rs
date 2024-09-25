@@ -12,8 +12,6 @@ pub fn stat_profile(
     state: &State<RocketState>,
 ) -> Result<Json<i64>, HttpErrorJson> {
     let conn = get_conn_lock!(state.conn);
-    match query_stat(&conn, body.0) {
-        Ok(v) => Ok(Json(v)),
-        Err(e) => Err(HttpErrorJson::from_msg(&e)),
-    }
+    let val = query_stat(&conn, body.0).map_err(|e| HttpErrorJson::from_msg(&e))?;
+    Ok(Json(val))
 }

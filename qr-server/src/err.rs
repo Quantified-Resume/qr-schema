@@ -16,6 +16,19 @@ where
     String::from(msg)
 }
 
+pub fn or_none<T, E>(result: Result<T, E>, msg: &str) -> Option<T>
+where
+    E: Display,
+{
+    match result {
+        Ok(v) => Some(v),
+        Err(e) => {
+            log::error!("{}: {}", msg, e);
+            None
+        }
+    }
+}
+
 pub fn none<T, E>(err: E, msg: &str) -> Option<T>
 where
     E: Display,

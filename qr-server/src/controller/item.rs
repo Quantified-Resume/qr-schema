@@ -44,26 +44,20 @@ pub fn create(
     state: &State<RocketState>,
 ) -> Result<Json<i64>, HttpErrorJson> {
     let mut conn = get_conn_lock!(state.conn);
-    let tx = match conn.transaction() {
-        Err(e) => {
-            log::error!("Failed to create transaction: {}", e);
-            return Err(HttpErrorJson::sys_busy(e));
-        }
-        Ok(tx) => tx,
-    };
-    let bucket_key = match &body.bucket {
-        Some(v) => v,
-        None => return Err(HttpErrorJson::from_msg("Bucket key is required")),
-    };
-    match create_item(&tx, bucket_key, &body.to_item()) {
-        Ok(id) => match tx.commit() {
-            Ok(_) => Ok(Json(id)),
-            Err(e) => Err(HttpErrorJson::sys_busy(e)),
-        },
-        Err(e) => match tx.rollback() {
-            Ok(_) => Err(HttpErrorJson::from_err(&e, e.to_string())),
-            Err(txe) => Err(HttpErrorJson::sys_busy(txe)),
-        },
+    let tx = conn.transaction().map_err(|e| HttpErrorJson::sys_busy(e))?;
+    let bucket_key = body
+        .bucket
+        .clone()
+        .ok_or(HttpErrorJson::from_msg("Bucket key is required"))?;
+    match create_item(&tx, &bucket_key, &body.to_item()) {
+        Ok(id) => tx
+            .commit()
+            .map_err(|e| HttpErrorJson::sys_busy(e))
+            .map(|_| Json(id)),
+        Err(e) => tx
+            .rollback()
+            .map_err(|txe| HttpErrorJson::sys_busy(txe))
+            .and_then(|_| Err(HttpErrorJson::from_err(&e, e.to_string()))),
     }
 }
 
@@ -74,22 +68,19 @@ pub fn get_detail_by_ref_id(
     state: &State<RocketState>,
 ) -> Result<Json<Item>, HttpErrorJson> {
     let conn = get_conn_lock!(state.conn);
-    match select_item_by_ref_id(&conn, bid, rid) {
-        Ok(v) => match v {
-            Some(v) => Ok(Json(v)),
-            None => {
-                log::error!("Item not found: bucket_id={}, ref_id={}", bid, rid);
-                Err(HttpErrorJson::not_found())
-            }
-        },
-        Err(e) => {
+    let item = select_item_by_ref_id(&conn, bid, rid)
+        .map_err(|e| {
             log::error!(
                 "Failed to query item by refId: bucket_id={}, refId={}, err={}",
                 bid,
                 rid,
                 e
             );
-            Err(HttpErrorJson::from_err("Failed", e))
-        }
-    }
+            HttpErrorJson::from_err("Failed", e)
+        })?
+        .ok_or_else(|| {
+            log::error!("Item not found: bucket_id={}, ref_id={}", bid, rid);
+            HttpErrorJson::not_found()
+        })?;
+    Ok(Json(item))
 }

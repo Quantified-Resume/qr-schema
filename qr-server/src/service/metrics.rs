@@ -11,10 +11,7 @@ pub fn check_metrics(
     let mut valid_value = Map::new();
     for metrics in def {
         let val = metrics_map.get(&metrics.field);
-        match check_each(&metrics, val) {
-            Ok(opt) => opt.and_then(|v| valid_value.insert(metrics.field, v.clone())),
-            Err(e) => return Err(e),
-        };
+        check_each(&metrics, val)?.and_then(|v| valid_value.insert(metrics.field, v.clone()));
     }
     Ok(valid_value)
 }
@@ -31,7 +28,7 @@ fn check_each(metrics: &Metrics, mut val_opt: Option<&Value>) -> Result<Option<V
     let type_check_res = match metrics.value_type {
         MetricsValueType::Time => check_time(val),
         MetricsValueType::Count => check_count(val),
-        MetricsValueType::Amount => check_amount(val).map_err(|_| "Invalid amount".to_string()),
+        MetricsValueType::Amount => check_amount(val).map_err(|e| format!("Invalid amount: {}", e)),
     };
     type_check_res.map(|val| Some(val))
 }
@@ -58,51 +55,38 @@ fn check_time(val: &Value) -> Result<Value, String> {
 }
 
 fn check_count(val: &Value) -> Result<Value, String> {
-    match val.is_number() {
-        true => Ok(val.clone()),
-        false => Err("Invalid value type of count".to_string()),
+    if val.is_number() {
+        Ok(val.clone())
+    } else {
+        Err("Invalid value type of count".to_string())
     }
 }
 
-fn check_amount(val: &Value) -> Result<Value, ()> {
+fn check_amount(val: &Value) -> Result<Value, String> {
     if val.is_string() {
         let val_str = val.to_string();
-        return match iso::find(&val_str[0..3]) {
-            Some(currency) => match Decimal::from_str_radix(&val_str[3..], 10) {
-                Ok(value) => Ok(amount_of(currency, value)),
-                Err(e) => {
-                    log::error!("Failed to parse amount: {}, err={}", val_str, e);
-                    Err(())
-                }
-            },
-            None => Err(()),
-        };
+        let currency = iso::find(&val_str[0..3]).ok_or("Invalid currency".to_string())?;
+        let value = Decimal::from_str_radix(&val_str[3..], 10)
+            .map_err(|_| format!("Failed to parse value: {}", val_str))?;
+        return Ok(amount_of(currency, value));
     } else if val.is_object() {
-        let map = match val.as_object() {
-            Some(m) => m,
-            None => return Err(()),
-        };
-        let currency_opt = map
+        let map = val.as_object().ok_or("Invalid object".to_string())?;
+        let currency = map
             .get("currency")
             .take_if(|v| v.is_string())
-            .and_then(|c| iso::find(&c.to_string()));
-        let currency = match currency_opt {
-            Some(v) => v,
-            None => return Err(()),
-        };
-        let value = match map.get("value") {
-            Some(v) => v,
-            None => return Err(()),
-        };
+            .and_then(|c| iso::find(&c.to_string()))
+            .ok_or("Failed to find currency".to_string())?;
+        let value = map
+            .get("value")
+            .ok_or("Failed to find currency".to_string())?;
         if value.is_string() || value.is_number() {
-            return match Decimal::from_str_radix(&value.to_string(), 10) {
-                Ok(decimal) => Ok(amount_of(currency, decimal)),
-                Err(_) => Err(()),
-            };
+            let decimal = Decimal::from_str_radix(&value.to_string(), 10)
+                .map_err(|_| format!("Failed to parse value: {}", 1))?;
+            return Ok(amount_of(currency, decimal));
         }
-        return Err(());
+        return Err(format!("Invalid value: {}", value));
     }
-    Err(())
+    Err("Not supported amount object".to_string())
 }
 
 fn amount_of(currency: &Currency, value: Decimal) -> Value {

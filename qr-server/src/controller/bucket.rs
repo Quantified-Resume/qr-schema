@@ -1,16 +1,3 @@
-use std::str::FromStr;
-
-use itertools::Itertools;
-use qr_model::{Bucket, BucketStatus, Builtin, Item};
-use qr_repo::{
-    delete_bucket, delete_item_by_bucket_id, exist_item_by_bucket_id, select_all_buckets,
-    select_bucket, update_bucket, BucketQuery,
-};
-use rocket::{delete, get, http::Status, post, put, serde::json::Json, State};
-use rusqlite::{Connection, TransactionBehavior};
-use serde::Deserialize;
-use serde_json::{Map, Value};
-
 use super::{
     common::{HttpErrorJson, RocketState},
     item,
@@ -19,6 +6,23 @@ use crate::{
     get_conn_lock,
     service::{self, create_bucket},
 };
+use itertools::Itertools;
+use qr_model::{Bucket, BucketStatus, Builtin, Item};
+use qr_repo::{
+    delete_bucket, delete_item_by_bucket_id, exist_item_by_bucket_id, select_all_buckets,
+    select_bucket, update_bucket, BucketQuery,
+};
+use rocket::{
+    delete, get,
+    http::Status,
+    post, put,
+    serde::json::Json,
+    State,
+};
+use rusqlite::{Connection, TransactionBehavior};
+use serde::Deserialize;
+use serde_json::{Map, Value};
+use std::str::FromStr;
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -57,10 +61,10 @@ pub fn create(
     let request = body.into_inner();
     let mut bucket = request.to_bucket();
     let mut conn: std::sync::MutexGuard<'_, rusqlite::Connection> = get_conn_lock!(state.conn);
-    let tx = match conn.transaction_with_behavior(TransactionBehavior::Immediate) {
-        Ok(v) => v,
-        Err(e) => return Err(HttpErrorJson::sys_busy(e)),
-    };
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| HttpErrorJson::sys_busy(e))?;
+
     match create_bucket(&tx, &mut bucket) {
         Ok(id) => tx
             .commit()
@@ -148,28 +152,30 @@ pub fn remove(
     state: &State<RocketState>,
 ) -> Result<(), HttpErrorJson> {
     let mut conn = get_conn_lock!(state.conn);
-    let check_res = check_bucket_exist(&conn, bucket_id);
-    if check_res.is_err() {
-        return check_res.map(|_| ());
-    }
-    let exist_items = exist_item_by_bucket_id(&conn, bucket_id);
+    check_bucket_exist(&conn, bucket_id)?;
+
+    let exist_items = exist_item_by_bucket_id(&conn, bucket_id).map_err(|e| {
+        log::error!("Failed to find bucket by id: err={}, id={}", e, bucket_id);
+        HttpErrorJson::from_msg("Failed to find bucket by id")
+    })?;
     if exist_items && !force.unwrap_or(false) {
         return Err(HttpErrorJson::new(
             Status::BadRequest,
             "Can't delete bucket with items",
         ));
     }
-    let tx_res = conn.transaction_with_behavior(TransactionBehavior::Immediate);
-    if tx_res.is_err() {
-        return Err(HttpErrorJson::sys_busy(tx_res.unwrap_err()));
-    }
-    let tx = tx_res.unwrap();
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| HttpErrorJson::sys_busy(e))?;
     let res = delete_item_by_bucket_id(&tx, bucket_id).and_then(|cnt| {
         log::info!("Deleted {} items of bucket[id={}]", cnt, bucket_id);
         delete_bucket(&tx, bucket_id).map(|_| ())
     });
     match res {
-        Ok(_) => tx.commit().map_err(|e| HttpErrorJson::sys_busy(e)),
+        Ok(_) => {
+            log::info!("Deleted bucket: id={}", bucket_id);
+            tx.commit().map_err(|e| HttpErrorJson::sys_busy(e))
+        }
         Err(e) => match tx.rollback() {
             Ok(_) => Err(HttpErrorJson::sys_busy(e)),
             Err(txe) => Err(HttpErrorJson::sys_busy(txe)),
@@ -189,10 +195,8 @@ pub fn batch_create_items(
 ) -> Result<(), HttpErrorJson> {
     let mut conn = get_conn_lock!(state.conn);
     let items = body.0.iter().map(|r| r.to_item()).collect_vec();
-    match service::batch_create_item(&mut conn, bid, items) {
-        Ok(_) => Ok(()),
-        Err(e) => Err(HttpErrorJson::from_msg(&e)),
-    }
+    service::batch_create_item(&mut conn, bid, items).map_err(|e| HttpErrorJson::from_msg(&e))?;
+    Ok(())
 }
 
 #[get("/<bid>/item", format = "application/json")]
@@ -201,8 +205,16 @@ pub fn list_all_items(
     state: &State<RocketState>,
 ) -> Result<Json<Vec<Item>>, HttpErrorJson> {
     let conn = get_conn_lock!(state.conn);
-    match service::list_item_by_bucket_id(&conn, bid) {
-        Ok(v) => Ok(Json(v)),
-        Err(msg) => Err(HttpErrorJson::from_msg(&msg)),
-    }
+    let v = service::list_item_by_bucket_id(&conn, bid).map_err(|e| HttpErrorJson::from_msg(&e))?;
+    Ok(Json(v))
+}
+
+#[get("/<bid>/chart", format = "application/json")]
+pub fn list_supported_chart_series(
+    bid: i64,
+    state: &State<RocketState>,
+) -> Result<Json<()>, HttpErrorJson> {
+    let conn: std::sync::MutexGuard<'_, Connection> = get_conn_lock!(state.conn);
+    service::list_series_by_bucket_id(&conn, bid).map_err(|e| HttpErrorJson::from_msg(&e))?;
+    Ok(Json(()))
 }
