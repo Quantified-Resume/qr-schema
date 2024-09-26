@@ -9,7 +9,7 @@ use rusqlite::Connection;
 
 use crate::err::cvt_err;
 
-use super::{bucket::create_builtin_bucket, check_metrics, BucketKey};
+use super::{bucket::create_builtin_bucket, check_metrics, err::sys_busy, BucketKey};
 
 pub fn create_item(conn: &Connection, b_key: &BucketKey, item: &Item) -> Result<i64, String> {
     // 1. check bucket
@@ -31,19 +31,16 @@ fn create_item_inner(
         .map_err(|e| cvt_err(e, "Failed to query exist item"))?;
     if item_opt.is_some() {
         let exist = item_opt.unwrap();
-        match ignore_exist {
-            true => return Ok(exist.id.unwrap()),
-            false => {
-                log::error!(
-                    "RefID duplicated while creating item: refId={}, bucketId={}",
-                    item.ref_id,
-                    bid
-                );
-                return Err("Ref ID duplicated".to_string());
-            }
+        if !ignore_exist {
+            log::error!(
+                "RefID duplicated while creating item: refId={}, bucketId={}",
+                item.ref_id,
+                bid
+            );
+            return Err("Ref ID duplicated".to_string());
         }
+        return exist.id.ok_or("Unexpected error".to_string());
     }
-
     // 3. insert
     insert_item(conn, bid, &item).map_err(|e| {
         log::error!("Failed to create item: {}", e);
@@ -54,28 +51,15 @@ fn create_item_inner(
 /// Batch create item
 pub fn batch_create_item(conn: &mut Connection, bid: i64, items: Vec<Item>) -> Result<i64, String> {
     let bucket = check_bucket(conn, &BucketKey::new_from_id(bid))?;
-    let tx = conn.transaction().map_err(|e| {
-        log::error!("Failed to gain transaction: {}", e);
-        "System is busy".to_string()
-    })?;
+    let tx = conn.transaction().map_err(sys_busy)?;
     for item in &items {
         let res = create_item_inner(&tx, &bucket, &mut item.clone(), true);
-        if !res.is_err() {
-            let e = res.unwrap_err();
-            match tx.rollback() {
-                Ok(_) => {}
-                Err(txe) => log::error!("Failed rollback: {}", txe),
-            }
-            return Err(e);
+        if res.is_err() {
+            return tx.rollback().map_err(sys_busy).and(res);
         }
     }
-    match tx.commit() {
-        Ok(_) => Ok(items.len() as i64),
-        Err(e) => {
-            log::error!("Failed to commit: {}", e);
-            Err("System is busy".to_string())
-        }
-    }
+    tx.commit().map_err(sys_busy)?;
+    Ok(items.len() as i64)
 }
 
 fn check_bucket(conn: &Connection, key: &BucketKey) -> Result<Bucket, String> {

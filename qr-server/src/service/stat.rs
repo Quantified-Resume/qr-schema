@@ -1,13 +1,14 @@
 use super::BucketKey;
 use itertools::Itertools;
 use jsonpath::Selector;
+use qr_model::{ChartSeries, Item};
 use qr_repo::{select_all_ids_by_builtin, select_all_items, select_bucket};
 use qr_util::if_present;
 use rusqlite::{types::Value, Connection};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::vec;
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum FilterOp {
     Eq,
     Neq,
@@ -26,37 +27,65 @@ impl FilterOp {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PayloadFilter {
     pub path: String,
     pub op: FilterOp,
     pub val: Option<serde_json::Value>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct QueryRequest {
+pub struct ChartQueryRequest {
     pub bucket: BucketKey,
     pub ts_start: Option<i64>,
     pub ts_end: Option<i64>,
     pub payload_filter: Option<Vec<PayloadFilter>>,
+    pub metrics: Option<Vec<String>>,
+    pub series: ChartSeries,
 }
 
-pub fn query_stat(conn: &Connection, req: QueryRequest) -> Result<i64, String> {
-    log::info!("query_stat: req={:?}", req);
-    let bucket_ids = check_bucket(conn, &req.bucket)?;
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ChartResult {
+    query: ChartQueryRequest,
+    version: i64,
+    option: serde_json::Map<String, serde_json::Value>,
+}
+
+impl ChartResult {
+    fn v1(req: &ChartQueryRequest, option: serde_json::Map<String, serde_json::Value>) -> Self {
+        ChartResult {
+            version: 1,
+            query: req.clone(),
+            option,
+        }
+    }
+}
+
+pub fn query_chart(conn: &Connection, req: ChartQueryRequest) -> Result<ChartResult, String> {
+    log::info!("query_chart: req={:?}", req);
+    let ChartQueryRequest {
+        bucket,
+        series,
+        metrics,
+        ..
+    } = req.clone();
+    let bucket_ids = check_bucket(conn, &bucket)?;
     let (clauses, params) = built_clauses_and_params(bucket_ids, &req)?;
-    let _data = select_all_items(conn, clauses, params).map_err(|e| {
+    let items = select_all_items(conn, clauses, params).map_err(|e| {
         log::error!("Failed to query items: err={}", e);
         "Failed to query items".to_string()
     })?;
+    let option = generate_opt(&series, &metrics, items);
+    let result = ChartResult::v1(&req, option);
     // TODO
-    Ok(1)
+    Ok(result)
 }
 
 fn built_clauses_and_params(
     bucket_ids: Vec<i64>,
-    req: &QueryRequest,
+    req: &ChartQueryRequest,
 ) -> Result<(Vec<String>, Vec<Value>), String> {
     let mut clauses: Vec<String> = Vec::new();
     let mut params: Vec<Value> = Vec::new();
@@ -95,14 +124,14 @@ fn built_clauses_and_params(
 }
 
 fn check_bucket(conn: &Connection, key: &BucketKey) -> Result<Vec<i64>, String> {
-    let bucket_ids = match key.id {
+    match key.id {
         Some(id) => select_bucket(conn, id)
             .map_err(|e| {
                 log::error!("Errored to find bucket: id={}, e={}", id, e);
                 "Errored to find bucket".to_string()
             })?
             .ok_or("Bucket not found".to_string())
-            .map(|_| vec![id])?,
+            .map(|_| vec![id]),
         None => {
             let b = &key
                 .builtin
@@ -111,10 +140,9 @@ fn check_bucket(conn: &Connection, key: &BucketKey) -> Result<Vec<i64>, String> 
             select_all_ids_by_builtin(conn, b, key.builtin_ref_id.as_deref()).map_err(|e| {
                 log::error!("Failed to select ids by builtin: e={}, builtin={:?}", e, b);
                 "Failed to select all ids by builtin".to_string()
-            })?
+            })
         }
-    };
-    Ok(bucket_ids)
+    }
 }
 
 fn handle_payload_filter(
@@ -128,7 +156,7 @@ fn handle_payload_filter(
         let PayloadFilter { path, op, val } = f;
         Selector::new(&path).map_err(|e| {
             log::error!("Failed to parse json path: {:?}", e);
-            return format!("Invalid json path: {}", path);
+            format!("Invalid json path: {}", path)
         })?;
         match op {
             FilterOp::Eq | FilterOp::Neq => {
@@ -177,4 +205,17 @@ fn json_val_to_sql_val(json: &serde_json::Value) -> Value {
     } else {
         return Value::Text(json.to_string());
     }
+}
+
+fn generate_opt(
+    series: &ChartSeries,
+    metrics: &Option<Vec<String>>,
+    items: Vec<Item>,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut map = serde_json::Map::new();
+    match series {
+        ChartSeries::CalendarHeat => {}
+        ChartSeries::Line => {}
+    };
+    map
 }

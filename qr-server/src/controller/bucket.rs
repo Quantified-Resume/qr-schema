@@ -168,7 +168,10 @@ pub fn list_all_items(
 pub fn list_supported_chart_series(
     bid: i64,
     state: &State<RocketState>,
-) -> Result<(), HttpErrorJson> {
+) -> Result<Json<Vec<qr_model::ChartSeries>>, HttpErrorJson> {
     let conn: std::sync::MutexGuard<'_, Connection> = get_conn_lock!(state.conn);
-    service::list_series_by_bucket_id(&conn, bid).map_err(HttpErrorJson::from_msg)
+    let bucket = check_bucket_exist(&conn, bid).map_err(HttpErrorJson::from_msg)?;
+    service::list_series_by_bucket(&conn, &bucket)
+        .map(Json)
+        .map_err(HttpErrorJson::from_msg)
 }

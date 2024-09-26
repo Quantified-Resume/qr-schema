@@ -2,17 +2,17 @@ use super::common::HttpErrorJson;
 use crate::{
     controller::common::RocketState,
     get_conn_lock,
-    service::{query_stat, QueryRequest},
+    service::{query_chart, ChartQueryRequest, ChartResult},
 };
 use rocket::{post, serde::json::Json, State};
 
-#[post("/profile", data = "<body>", format = "application/json")]
+#[post("/chart", data = "<body>", format = "application/json")]
 pub fn stat_profile(
-    body: Json<QueryRequest>,
+    body: Json<ChartQueryRequest>,
     state: &State<RocketState>,
-) -> Result<Json<i64>, HttpErrorJson> {
+) -> Result<Json<ChartResult>, HttpErrorJson> {
     let conn = get_conn_lock!(state.conn);
-    query_stat(&conn, body.0)
+    query_chart(&conn, body.0)
         .map(Json)
         .map_err(HttpErrorJson::from_msg)
 }

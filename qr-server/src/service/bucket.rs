@@ -7,7 +7,7 @@ use qr_repo::{
     select_bucket, select_bucket_by_builtin, Sequence,
 };
 use rusqlite::{Connection, TransactionBehavior};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub fn create_bucket(conn: &Connection, bucket: &mut Bucket) -> Result<i64, String> {
     // 1. check bucket
@@ -65,7 +65,7 @@ fn check_builtin(conn: &Connection, bucket: &Bucket) -> Result<(), String> {
     }
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BucketKey {
     pub id: Option<i64>,
     pub builtin: Option<Builtin>,
@@ -80,12 +80,6 @@ impl BucketKey {
             builtin_ref_id: None,
         }
     }
-}
-
-pub fn list_series_by_bucket_id(conn: &Connection, id: i64) -> Result<(), String> {
-    let _bucket = select_bucket_inner(conn, id)?.ok_or("Bucket not found".to_string())?;
-    // TODO
-    Ok(())
 }
 
 fn select_bucket_inner(conn: &Connection, id: i64) -> Result<Option<Bucket>, String> {
