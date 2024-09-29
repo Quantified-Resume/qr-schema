@@ -1,12 +1,13 @@
-use super::BucketKey;
+use crate::service::BucketKey;
 use itertools::Itertools;
 use jsonpath::Selector;
-use qr_model::{ChartSeries, Item};
-use qr_repo::{select_all_ids_by_builtin, select_all_items, select_bucket};
+use qr_repo::{select_all_ids_by_builtin, select_bucket};
 use qr_util::if_present;
-use rusqlite::{types::Value, Connection};
+use rocket::serde;
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use std::vec;
+
+use super::convert::json_val_to_sql_val;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum FilterOp {
@@ -36,68 +37,30 @@ pub struct PayloadFilter {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct ChartQueryRequest {
+pub struct CommonFilter {
     pub bucket: BucketKey,
     pub ts_start: Option<i64>,
     pub ts_end: Option<i64>,
-    pub payload_filter: Option<Vec<PayloadFilter>>,
+    pub payload: Option<Vec<PayloadFilter>>,
     pub metrics: Option<Vec<String>>,
-    pub series: ChartSeries,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct ChartResult {
-    query: ChartQueryRequest,
-    version: i64,
-    option: serde_json::Map<String, serde_json::Value>,
-}
-
-impl ChartResult {
-    fn v1(req: &ChartQueryRequest, option: serde_json::Map<String, serde_json::Value>) -> Self {
-        ChartResult {
-            version: 1,
-            query: req.clone(),
-            option,
-        }
-    }
-}
-
-pub fn query_chart(conn: &Connection, req: ChartQueryRequest) -> Result<ChartResult, String> {
-    log::info!("query_chart: req={:?}", req);
-    let ChartQueryRequest {
-        bucket,
-        series,
-        metrics,
-        ..
-    } = req.clone();
-    let bucket_ids = check_bucket(conn, &bucket)?;
-    let (clauses, params) = built_clauses_and_params(bucket_ids, &req)?;
-    let items = select_all_items(conn, clauses, params).map_err(|e| {
-        log::error!("Failed to query items: err={}", e);
-        "Failed to query items".to_string()
-    })?;
-    let option = generate_opt(&series, &metrics, items);
-    let result = ChartResult::v1(&req, option);
-    // TODO
-    Ok(result)
-}
-
-fn built_clauses_and_params(
-    bucket_ids: Vec<i64>,
-    req: &ChartQueryRequest,
-) -> Result<(Vec<String>, Vec<Value>), String> {
-    let mut clauses: Vec<String> = Vec::new();
-    let mut params: Vec<Value> = Vec::new();
-    let mut p_idx = 1;
+pub fn built_clauses_and_params(
+    conn: &Connection,
+    filter: &CommonFilter,
+) -> Result<(Vec<String>, Vec<rusqlite::types::Value>), String> {
+    let bucket_ids = check_bucket(conn, &filter.bucket)?;
     // 1. bucket_ids
     if bucket_ids.is_empty() {
         return Ok((vec![String::from("false")], vec![]));
     }
+    let mut clauses: Vec<String> = Vec::new();
+    let mut params: Vec<rusqlite::types::Value> = Vec::new();
+    let mut p_idx = 1;
     let b_sql = bucket_ids
         .iter()
         .map(|bid| {
-            params.push(Value::Integer(*bid));
+            params.push(rusqlite::types::Value::Integer(*bid));
             let placeholder = format!("?{}", p_idx);
             p_idx += 1;
             placeholder
@@ -105,18 +68,18 @@ fn built_clauses_and_params(
         .join(", ");
     clauses.push(format!("bucket_id in ({})", b_sql));
     // 2. time
-    if_present(req.ts_start, |ts| {
+    if_present(filter.ts_start, |ts| {
         clauses.push(format!("timestamp >= ?{}", p_idx));
         p_idx += 1;
-        params.push(Value::Integer(ts));
+        params.push(rusqlite::types::Value::Integer(ts));
     });
-    if_present(req.ts_end, |ts| {
+    if_present(filter.ts_end, |ts| {
         clauses.push(format!("timestamp < ?{}", p_idx));
         p_idx += 1;
-        params.push(Value::Integer(ts));
+        params.push(rusqlite::types::Value::Integer(ts));
     });
     // 3. payload
-    let _new_p_idx = match &req.payload_filter {
+    let _new_p_idx = match &filter.payload {
         Some(v) => handle_payload_filter(v, &mut clauses, &mut params, p_idx),
         None => Ok(p_idx),
     }?;
@@ -148,7 +111,7 @@ fn check_bucket(conn: &Connection, key: &BucketKey) -> Result<Vec<i64>, String> 
 fn handle_payload_filter(
     pf: &Vec<PayloadFilter>,
     clause: &mut Vec<String>,
-    p: &mut Vec<Value>,
+    p: &mut Vec<rusqlite::types::Value>,
     idx_start: i32,
 ) -> Result<i32, String> {
     let mut idx = idx_start;
@@ -179,43 +142,4 @@ fn handle_payload_filter(
         };
     }
     Ok(idx)
-}
-
-fn json_val_to_sql_val(json: &serde_json::Value) -> Value {
-    if json.is_null() {
-        return Value::Null;
-    } else if json.is_boolean() {
-        let v = json
-            .as_bool()
-            .map(|v| match v {
-                true => 1,
-                false => 0,
-            })
-            .unwrap_or(0);
-        return Value::Integer(v);
-    } else if json.is_i64() {
-        let v = json.as_i64().unwrap_or(0);
-        return Value::Integer(v);
-    } else if json.is_u64() {
-        let v = match json.as_u64() {
-            Some(v) => v,
-            None => 0,
-        };
-        return Value::Integer(v as i64);
-    } else {
-        return Value::Text(json.to_string());
-    }
-}
-
-fn generate_opt(
-    series: &ChartSeries,
-    metrics: &Option<Vec<String>>,
-    items: Vec<Item>,
-) -> serde_json::Map<String, serde_json::Value> {
-    let mut map = serde_json::Map::new();
-    match series {
-        ChartSeries::CalendarHeat => {}
-        ChartSeries::Line => {}
-    };
-    map
 }

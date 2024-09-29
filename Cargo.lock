@@ -1329,6 +1329,7 @@ dependencies = [
  "rusty-money",
  "serde",
  "serde_json",
+ "strum",
 ]
 
 [[package]]

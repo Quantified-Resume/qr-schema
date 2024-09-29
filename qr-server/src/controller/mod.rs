@@ -1,7 +1,7 @@
 mod bucket;
 mod common;
 mod item;
-mod stat;
+mod query;
 
 use std::sync::Mutex;
 
@@ -30,6 +30,9 @@ pub fn register_controllers(conn: Mutex<Connection>) -> Rocket<Build> {
             "/api/0/item",
             routes![item::create, item::get_detail_by_ref_id],
         )
-        .mount("/api/0/stat", routes![stat::stat_profile]);
+        .mount(
+            "/api/0/query",
+            routes![query::list_items, query::list_group],
+        );
     rocket
 }
