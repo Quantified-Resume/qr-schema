@@ -1,13 +1,13 @@
 mod bucket;
 mod builtin;
-mod chart;
+mod common;
 mod item;
 mod metrics;
 mod tag;
 
 pub use self::bucket::{Bucket, BucketStatus};
 pub use self::builtin::Builtin;
-pub use self::chart::ChartSeries;
+pub use self::common::MetaItem;
 pub use self::item::{Item, NamingEntity};
 pub use self::metrics::{Metrics, MetricsValueType};
 

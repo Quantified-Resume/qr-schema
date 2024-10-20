@@ -53,6 +53,8 @@ pub fn batch_create_item(conn: &mut Connection, bid: i64, items: Vec<Item>) -> R
     let bucket = check_bucket(conn, &BucketKey::new_from_id(bid))?;
     let tx = conn.transaction().map_err(sys_busy)?;
     for item in &items {
+        log::debug!("Item: {:?}", item);
+        log::debug!("Cloned item: {:?}", item.clone());
         let res = create_item_inner(&tx, &bucket, &mut item.clone(), true);
         if res.is_err() {
             return tx.rollback().map_err(sys_busy).and(res);
@@ -82,7 +84,7 @@ fn check_bucket(conn: &Connection, key: &BucketKey) -> Result<Bucket, String> {
         }
     }?;
 
-    if BucketStatus::Enabled != bucket.status {
+    if BucketStatus::Enabled == bucket.status {
         Ok(bucket)
     } else {
         Err("Invalid bucket status".to_string())

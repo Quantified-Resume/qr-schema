@@ -1,4 +1,4 @@
-use rust_decimal::{prelude::Zero, Decimal};
+use rust_decimal::Decimal;
 
 pub fn json_val_to_sql_val(json: &serde_json::Value) -> rusqlite::types::Value {
     if json.is_null() {

@@ -56,7 +56,7 @@ impl GroupMetrics {
         }
     }
 
-    pub fn reduce(&mut self, val: Decimal) {
+    pub fn reduce(&mut self, _val: Decimal) {
         self.count += 1;
         todo!()
     }
@@ -139,6 +139,6 @@ fn group_by(
     todo!()
 }
 
-fn compute_key(item: &qr_model::Item, group: &Vec<GroupBy>, offset: i64) -> Vec<String> {
+fn compute_key(_item: &qr_model::Item, _group: &Vec<GroupBy>, _offset: i64) -> Vec<String> {
     todo!()
 }

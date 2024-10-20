@@ -14,6 +14,8 @@ use super::query::CommonFilter;
 pub struct PlainItem {
     id: i64,
     timestamp: i64,
+    name: Option<String>,
+    ref_id: String,
     payload: Option<serde_json::Map<String, serde_json::Value>>,
     metrics: serde_json::Map<String, serde_json::Value>,
 }
@@ -51,14 +53,16 @@ pub fn query_plain(conn: &Connection, filter: &CommonFilter) -> Result<PlainResu
 }
 
 fn cvt_item(items: &Vec<qr_model::Item>, target_metrics: &Option<Vec<String>>) -> Vec<PlainItem> {
-    let invalid_metrics_opt = target_metrics.clone().take_if(|v| v.is_empty());
+    let valid_metrics = target_metrics.clone().take_if(|v| !v.is_empty());
     items
         .iter()
         .map(|v| PlainItem {
             id: v.id.unwrap_or(0),
+            name: v.name.clone(),
+            ref_id: v.ref_id.clone(),
             timestamp: v.timestamp,
             payload: v.payload.clone(),
-            metrics: extract_metrics(&v.metrics, &invalid_metrics_opt),
+            metrics: extract_metrics(&v.metrics, &valid_metrics),
         })
         .collect()
 }

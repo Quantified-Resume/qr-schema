@@ -7,10 +7,10 @@ use crate::{
     service::{self, check_bucket_exist, create_bucket, remove_bucket},
 };
 use itertools::Itertools;
-use qr_model::{Bucket, BucketStatus, Builtin, Item};
+use qr_model::{Bucket, BucketStatus, Builtin, Item, MetaItem};
 use qr_repo::{select_all_buckets, update_bucket, BucketQuery};
 use rocket::{delete, get, post, put, serde::json::Json, State};
-use rusqlite::{Connection, TransactionBehavior};
+use rusqlite::TransactionBehavior;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 use std::str::FromStr;
@@ -164,14 +164,10 @@ pub fn list_all_items(
         .map_err(HttpErrorJson::from_msg)
 }
 
-#[get("/<bid>/chart", format = "application/json")]
-pub fn list_supported_chart_series(
+#[get("/<bid>/metrics", format = "application/json")]
+pub fn list_all_metrics(
     bid: i64,
     state: &State<RocketState>,
-) -> Result<Json<Vec<qr_model::ChartSeries>>, HttpErrorJson> {
-    let conn: std::sync::MutexGuard<'_, Connection> = get_conn_lock!(state.conn);
-    let bucket = check_bucket_exist(&conn, bid).map_err(HttpErrorJson::from_msg)?;
-    service::list_series_by_bucket(&conn, &bucket)
-        .map(Json)
-        .map_err(HttpErrorJson::from_msg)
+) -> Result<Json<Vec<MetaItem>>, String> {
+    Err("".to_string())
 }
