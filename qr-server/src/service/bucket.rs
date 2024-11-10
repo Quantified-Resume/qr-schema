@@ -1,7 +1,7 @@
 use crate::service::err::sys_busy;
 
 use super::super::err::cvt_err;
-use qr_model::{Bucket, Builtin};
+use qr_model::{Bucket, Builtin, MetaItem};
 use qr_repo::{
     delete_bucket, delete_item_by_bucket_id, exist_item_by_bucket_id, insert_bucket, next_seq,
     select_bucket, select_bucket_by_builtin, Sequence,
@@ -117,4 +117,15 @@ pub fn remove_bucket(conn: &mut Connection, id: i64, force: bool) -> Result<(), 
 
 pub fn check_bucket_exist(conn: &Connection, id: i64) -> Result<Bucket, String> {
     select_bucket_inner(conn, id)?.ok_or("Bucket not found".to_string())
+}
+
+pub fn select_bucket_metrics(conn: &Connection, id: i64) -> Result<Vec<MetaItem>, String> {
+    let bucket = select_bucket_inner(conn, id)?.ok_or("Bucket not found".to_string())?;
+    let builtin = bucket.builtin.ok_or("Not builtin bucket".to_string())?;
+    let metrics = builtin.get_metrics_def();
+    let items = metrics
+        .into_iter()
+        .map(|m| MetaItem::from_metrics(&m))
+        .collect();
+    Ok(items)
 }

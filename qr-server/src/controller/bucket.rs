@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     get_conn_lock,
-    service::{self, check_bucket_exist, create_bucket, remove_bucket},
+    service::{self, check_bucket_exist, create_bucket, remove_bucket, select_bucket_metrics},
 };
 use itertools::Itertools;
 use qr_model::{Bucket, BucketStatus, Builtin, Item, MetaItem};
@@ -168,6 +168,9 @@ pub fn list_all_items(
 pub fn list_all_metrics(
     bid: i64,
     state: &State<RocketState>,
-) -> Result<Json<Vec<MetaItem>>, String> {
-    Err("".to_string())
+) -> Result<Json<Vec<MetaItem>>, HttpErrorJson> {
+    let conn = get_conn_lock!(state.conn);
+    select_bucket_metrics(&conn, bid)
+        .map(Json)
+        .map_err(HttpErrorJson::from_msg)
 }

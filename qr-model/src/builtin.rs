@@ -21,8 +21,8 @@ impl Builtin {
     pub fn get_metrics_def(&self) -> Vec<Metrics> {
         match self {
             Builtin::BrowserTime => vec![
-                Metrics::new("visit", MetricsValueType::Count, false),
-                Metrics::new("focus", MetricsValueType::Time, false),
+                Metrics::new("visit", "Visit count", MetricsValueType::Count, false),
+                Metrics::new("focus", "Focus time", MetricsValueType::Time, false),
             ],
         }
     }

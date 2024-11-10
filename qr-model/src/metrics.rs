@@ -16,6 +16,10 @@ pub struct Metrics {
      */
     pub field: String,
     /**
+     * Label of field
+     */
+    pub label: String,
+    /**
      * Value type
      */
     pub value_type: MetricsValueType,
@@ -23,9 +27,10 @@ pub struct Metrics {
 }
 
 impl Metrics {
-    pub fn new(field: &str, value_type: MetricsValueType, required: bool) -> Metrics {
+    pub fn new(field: &str, label: &str, value_type: MetricsValueType, required: bool) -> Metrics {
         Metrics {
             field: String::from(field),
+            label: String::from(label),
             value_type,
             required,
         }
