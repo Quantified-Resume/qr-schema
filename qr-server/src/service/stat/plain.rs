@@ -5,7 +5,7 @@ use rocket::serde;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
-use crate::service::stat::query::built_clauses_and_params;
+use crate::service::stat::query::build_clauses_and_params;
 
 use super::query::CommonFilter;
 
@@ -42,7 +42,7 @@ impl PlainResult {
 /// Query items
 pub fn query_plain(conn: &Connection, filter: &CommonFilter) -> Result<PlainResult, String> {
     log::info!("query_plain: req={:?}", filter);
-    let (clauses, params) = built_clauses_and_params(conn, filter)?;
+    let (clauses, params) = build_clauses_and_params(conn, filter)?;
     let mut items = select_all_items(conn, clauses, params).map_err(|e| {
         log::error!("Failed to query items: err={}", e);
         "Failed to query items".to_string()

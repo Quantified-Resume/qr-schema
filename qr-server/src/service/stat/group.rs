@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use strum::{AsRefStr, EnumString};
 
-use crate::service::stat::{convert::json_val_to_decimal, query::built_clauses_and_params};
+use crate::service::stat::{convert::json_val_to_decimal, query::build_clauses_and_params};
 
 use super::CommonFilter;
 
@@ -89,7 +89,7 @@ impl GroupResult {
 pub fn query_group(conn: &Connection, request: &GroupRequest) -> Result<GroupResult, String> {
     log::info!("query_group: req={:?}", request);
     let filter = &request.filter;
-    let (clauses, params) = built_clauses_and_params(conn, filter)?;
+    let (clauses, params) = build_clauses_and_params(conn, filter)?;
     let mut items = select_all_items(conn, clauses, params).map_err(|e| {
         log::error!("Failed to query items: err={}", e);
         "Failed to query items".to_string()

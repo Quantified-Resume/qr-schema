@@ -32,7 +32,7 @@ pub fn register_controllers(conn: Mutex<Connection>) -> Rocket<Build> {
         )
         .mount(
             "/api/0/query",
-            routes![query::list_items, query::list_group],
+            routes![query::list_items, query::list_group, query::get_indicator],
         );
     rocket
 }

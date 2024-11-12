@@ -45,7 +45,7 @@ pub struct CommonFilter {
     pub metrics: Option<Vec<String>>,
 }
 
-pub fn built_clauses_and_params(
+pub fn build_clauses_and_params(
     conn: &Connection,
     filter: &CommonFilter,
 ) -> Result<(Vec<String>, Vec<rusqlite::types::Value>), String> {
