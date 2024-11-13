@@ -2,6 +2,7 @@
     "cSpell.words": [
         "AUTOINCREMENT",
         "chrono",
+        "Datelike",
         "dateparser",
         "itertools",
         "rowid",

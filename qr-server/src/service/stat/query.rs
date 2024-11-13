@@ -39,6 +39,8 @@ pub struct PayloadFilter {
 #[serde(rename_all = "camelCase")]
 pub struct CommonFilter {
     pub bucket: BucketKey,
+    // Utc Offset with minutes
+    pub utc_offset: i64,
     pub ts_start: Option<i64>,
     pub ts_end: Option<i64>,
     pub payload: Option<Vec<PayloadFilter>>,
