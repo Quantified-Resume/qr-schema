@@ -3,8 +3,8 @@ use crate::{
     controller::common::RocketState,
     get_conn_lock,
     service::{
-        query_group, query_indicator, query_plain, CommonFilter, GroupRequest, GroupResult,
-        IndicatorRequest, PlainResult,
+        query_group, query_indicator, query_line_chart, query_plain, CommonFilter, GroupRequest,
+        GroupResult, IndicatorRequest, LineChartRequest, LineChartResult, PlainResult,
     },
 };
 use rocket::{post, serde::json::Json, State};
@@ -39,6 +39,17 @@ pub fn get_indicator(
 ) -> Result<Json<Decimal>, HttpErrorJson> {
     let conn = get_conn_lock!(state.conn);
     query_indicator(&conn, &body.0)
+        .map(Json)
+        .map_err(HttpErrorJson::from_msg)
+}
+
+#[post("/line-chart", data = "<body>", format = "application/json")]
+pub fn get_line_chart(
+    body: Json<LineChartRequest>,
+    state: &State<RocketState>,
+) -> Result<Json<LineChartResult>, HttpErrorJson> {
+    let conn = get_conn_lock!(state.conn);
+    query_line_chart(&conn, &body.0)
         .map(Json)
         .map_err(HttpErrorJson::from_msg)
 }

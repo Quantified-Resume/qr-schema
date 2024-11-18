@@ -1,19 +1,13 @@
-use super::{query::build_clauses_and_params, CommonFilter};
+use crate::service::stat::common::sum;
+
+use super::{query::build_clauses_and_params, AggregationMethod, CommonFilter};
 use chrono::{DateTime, Datelike};
 use qr_model::Item;
 use qr_repo::select_all_items;
 use rusqlite::Connection;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use std::{any::Any, str::FromStr};
 use strum::{AsRefStr, EnumString};
-
-#[derive(EnumString, AsRefStr, Clone, Serialize, Deserialize, Debug)]
-pub enum IndicatorAggregation {
-    Sum,
-    Average,
-    Count,
-}
 
 #[derive(EnumString, AsRefStr, Clone, Serialize, Deserialize, Debug)]
 pub enum IndicatorCycle {
@@ -28,43 +22,8 @@ pub enum IndicatorCycle {
 #[serde(rename_all = "camelCase")]
 pub struct IndicatorRequest {
     filter: CommonFilter,
-    aggregation: IndicatorAggregation,
+    aggregation: AggregationMethod,
     average_cycle: Option<IndicatorCycle>,
-}
-
-fn cvt_json_2_decimal(
-    val: Option<&serde_json::Value>,
-    default_zero: bool,
-) -> Result<Decimal, String> {
-    match val {
-        Some(v) => {
-            if v.is_string() || v.is_number() {
-                let val_str = v.to_string();
-                return Decimal::from_str(&val_str).map_err(|e| {
-                    log::error!("Invalid decimal value: {}, e={:?}", val_str, e);
-                    "Invalid decimal value".to_string()
-                });
-            }
-            Err(format!(
-                "Unsupported value type: type={:?}, value={:?}",
-                v.type_id(),
-                v
-            ))
-        }
-        None => match default_zero {
-            true => Ok(Decimal::new(0, 0)),
-            false => Err("Value is null".to_string()),
-        },
-    }
-}
-
-fn sum(items: &Vec<Item>, metrics: &str) -> Result<Decimal, String> {
-    let mut sum = Decimal::new(0, 0);
-    for item in items {
-        let v = cvt_json_2_decimal(item.metrics.get(metrics), true)?;
-        sum = sum.saturating_add(v);
-    }
-    Ok(sum)
 }
 
 fn count(items: &Vec<Item>, metrics: &str) -> Result<Decimal, String> {
@@ -139,8 +98,8 @@ pub fn query_indicator(conn: &Connection, req: &IndicatorRequest) -> Result<Deci
     let aggregation = &req.aggregation;
     let cycle = &req.average_cycle;
     match aggregation {
-        IndicatorAggregation::Sum => sum(&items, &metrics),
-        IndicatorAggregation::Average => {
+        AggregationMethod::Sum => sum(&items, &metrics),
+        AggregationMethod::Average => {
             let sum = sum(&items, &metrics)?;
             let count = count_cycle(&items, cycle, &req.filter)?;
             let average = sum
@@ -148,7 +107,7 @@ pub fn query_indicator(conn: &Connection, req: &IndicatorRequest) -> Result<Deci
                 .unwrap_or(Decimal::new(0, 0));
             Ok(average)
         }
-        IndicatorAggregation::Count => count(&items, &metrics),
+        AggregationMethod::Count => count(&items, &metrics),
     }
 }
 

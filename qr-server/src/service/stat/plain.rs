@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::service::stat::query::build_clauses_and_params;
 
-use super::query::CommonFilter;
+use super::CommonFilter;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]

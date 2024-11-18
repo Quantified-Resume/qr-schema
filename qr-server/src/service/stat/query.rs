@@ -1,51 +1,10 @@
+use super::{convert::json_val_to_sql_val, CommonFilter, FilterOp, PayloadFilter};
 use crate::service::BucketKey;
 use itertools::Itertools;
 use jsonpath::Selector;
 use qr_repo::{select_all_ids_by_builtin, select_bucket};
 use qr_util::if_present;
-use rocket::serde;
 use rusqlite::Connection;
-use serde::{Deserialize, Serialize};
-
-use super::convert::json_val_to_sql_val;
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum FilterOp {
-    Eq,
-    Neq,
-    IsNul,
-    NotNul,
-}
-
-impl FilterOp {
-    fn to_sql(&self) -> String {
-        match self {
-            FilterOp::Eq => "=".to_string(),
-            FilterOp::Neq => "!=".to_string(),
-            FilterOp::IsNul => "IS NULL".to_string(),
-            FilterOp::NotNul => "IS NOT NULL".to_string(),
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct PayloadFilter {
-    pub path: String,
-    pub op: FilterOp,
-    pub val: Option<serde_json::Value>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct CommonFilter {
-    pub bucket: BucketKey,
-    // Utc Offset with minutes
-    pub utc_offset: i64,
-    pub ts_start: Option<i64>,
-    pub ts_end: Option<i64>,
-    pub payload: Option<Vec<PayloadFilter>>,
-    pub metrics: Option<Vec<String>>,
-}
 
 pub fn build_clauses_and_params(
     conn: &Connection,
