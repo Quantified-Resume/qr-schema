@@ -4,6 +4,7 @@
         "chrono",
         "Datelike",
         "dateparser",
+        "indexmap",
         "itertools",
         "rowid",
         "rusqlite",

@@ -31,3 +31,4 @@ jsonpath = "0.1.1"
 fern = { version = "0.6.2", features = ["colored"] }
 chrono = "0.4.38"
 strum = { version = "0.26.3", features = ["derive"] }
+indexmap = "2.6.0"

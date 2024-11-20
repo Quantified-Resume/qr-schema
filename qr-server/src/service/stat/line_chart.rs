@@ -1,6 +1,7 @@
 use std::{collections::HashMap, vec};
 
 use chrono::{DateTime, Datelike, Days, FixedOffset};
+use indexmap::IndexMap;
 use qr_model::Item;
 use qr_repo::select_all_items;
 use rocket::serde;
@@ -77,7 +78,7 @@ fn group_by(
     x: &LineChartQueryX,
     filter: &CommonFilter,
     items: &Vec<Item>,
-) -> Result<HashMap<String, Vec<Item>>, String> {
+) -> Result<IndexMap<String, Vec<Item>>, String> {
     match x.r#type {
         XValueType::Date => group_by_dates(filter, items),
     }
@@ -86,11 +87,11 @@ fn group_by(
 fn group_by_dates(
     filter: &CommonFilter,
     items: &Vec<Item>,
-) -> Result<HashMap<String, Vec<Item>>, String> {
+) -> Result<IndexMap<String, Vec<Item>>, String> {
     let offset_secs = (filter.utc_offset * 60) as i32;
     let tz = FixedOffset::west_opt(offset_secs).ok_or("Invalid offset value".to_string())?;
 
-    let mut map: HashMap<String, Vec<Item>> = HashMap::new();
+    let mut map: IndexMap<String, Vec<Item>> = IndexMap::new();
     for item in items {
         let utc = DateTime::from_timestamp_millis(item.timestamp)
             .ok_or(format!("Invalid time stamp of item: itemId={:?}", item.id).to_string())?;
@@ -105,6 +106,7 @@ fn group_by_dates(
             }
         };
     }
+    map.sort_keys();
     Ok(map)
 }
 
@@ -146,7 +148,7 @@ fn calc_x_values(req: &LineChartRequest, items: &Vec<Item>) -> Result<Vec<String
 
 fn calc_y_values(
     y_queries: &Vec<LineChartQueryY>,
-    grouped: &HashMap<String, Vec<Item>>,
+    grouped: &IndexMap<String, Vec<Item>>,
 ) -> Result<HashMap<String, Vec<LineChartItemY>>, String> {
     let mut map = HashMap::new();
     for y_query in y_queries {
