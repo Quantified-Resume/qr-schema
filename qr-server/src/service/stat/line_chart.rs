@@ -9,21 +9,15 @@ use rusqlite::Connection;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use super::{common::sum, query::build_clauses_and_params, CommonFilter};
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum XValueType {
-    Date,
-}
+use super::{
+    common::{group_by_dates, sum, KeyValueType, SeriesQuery},
+    query::build_clauses_and_params,
+    CommonFilter,
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LineChartQueryX {
-    pub r#type: XValueType,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct LineChartQueryY {
-    pub metrics: String,
+    pub r#type: KeyValueType,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -31,7 +25,7 @@ pub struct LineChartQueryY {
 pub struct LineChartRequest {
     pub filter: CommonFilter,
     pub x: LineChartQueryX,
-    pub y: Vec<LineChartQueryY>,
+    pub y: Vec<SeriesQuery>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -62,7 +56,7 @@ pub fn query_line_chart(
         "Failed to query items".to_string()
     })?;
 
-    let grouped_items = group_by(&req.x, &req.filter, &items)?;
+    let grouped_items: IndexMap<String, Vec<Item>> = group_by(&req.x, &req.filter, &items)?;
     let x_values = calc_x_values(&req, &items)?;
     let y_values = calc_y_values(&req.y, &grouped_items)?;
 
@@ -80,34 +74,9 @@ fn group_by(
     items: &Vec<Item>,
 ) -> Result<IndexMap<String, Vec<Item>>, String> {
     match x.r#type {
-        XValueType::Date => group_by_dates(filter, items),
+        KeyValueType::Date => group_by_dates(filter, items),
+        _ => Err("Unsupported x types".to_string()),
     }
-}
-
-fn group_by_dates(
-    filter: &CommonFilter,
-    items: &Vec<Item>,
-) -> Result<IndexMap<String, Vec<Item>>, String> {
-    let offset_secs = (filter.utc_offset * 60) as i32;
-    let tz = FixedOffset::west_opt(offset_secs).ok_or("Invalid offset value".to_string())?;
-
-    let mut map: IndexMap<String, Vec<Item>> = IndexMap::new();
-    for item in items {
-        let utc = DateTime::from_timestamp_millis(item.timestamp)
-            .ok_or(format!("Invalid time stamp of item: itemId={:?}", item.id).to_string())?;
-        let time = utc.with_timezone(&tz);
-        let date = format!("{}", time.format("%Y%m%d"));
-        match map.get_mut(&date) {
-            Some(list) => {
-                list.push(item.clone());
-            }
-            None => {
-                map.insert(date, vec![item.clone()]);
-            }
-        };
-    }
-    map.sort_keys();
-    Ok(map)
 }
 
 fn calc_x_values(req: &LineChartRequest, items: &Vec<Item>) -> Result<Vec<String>, String> {
@@ -147,7 +116,7 @@ fn calc_x_values(req: &LineChartRequest, items: &Vec<Item>) -> Result<Vec<String
 }
 
 fn calc_y_values(
-    y_queries: &Vec<LineChartQueryY>,
+    y_queries: &Vec<SeriesQuery>,
     grouped: &IndexMap<String, Vec<Item>>,
 ) -> Result<HashMap<String, Vec<LineChartItemY>>, String> {
     let mut map = HashMap::new();

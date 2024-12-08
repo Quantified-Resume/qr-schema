@@ -1,7 +1,12 @@
 use std::{any::Any, str::FromStr};
 
+use chrono::{DateTime, FixedOffset};
+use indexmap::IndexMap;
 use qr_model::Item;
 use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
+
+use super::CommonFilter;
 
 fn cvt_json_2_decimal(
     val: Option<&serde_json::Value>,
@@ -36,4 +41,69 @@ pub fn sum(items: &Vec<Item>, metrics: &str) -> Result<Decimal, String> {
         sum = sum.saturating_add(v);
     }
     Ok(sum)
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum KeyValueType {
+    Date,
+    Metrics,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SeriesQuery {
+    pub metrics: String,
+    // todo
+    // meta: MetaSeries,
+}
+
+// Group items by dates according to filter param
+pub fn group_by_dates(
+    filter: &CommonFilter,
+    items: &Vec<Item>,
+) -> Result<IndexMap<String, Vec<Item>>, String> {
+    let offset_secs = (filter.utc_offset * 60) as i32;
+    let tz = FixedOffset::west_opt(offset_secs).ok_or("Invalid offset value".to_string())?;
+
+    let mut map: IndexMap<String, Vec<Item>> = IndexMap::new();
+    for item in items {
+        let utc = DateTime::from_timestamp_millis(item.timestamp)
+            .ok_or(format!("Invalid time stamp of item: itemId={:?}", item.id).to_string())?;
+        let time = utc.with_timezone(&tz);
+        let date = format!("{}", time.format("%Y%m%d"));
+        match map.get_mut(&date) {
+            Some(list) => {
+                list.push(item.clone());
+            }
+            None => {
+                map.insert(date, vec![item.clone()]);
+            }
+        };
+    }
+    map.sort_keys();
+    Ok(map)
+}
+
+// Group items by dates according to filter param
+pub fn group_by_metrics(
+    metrics: &str,
+    items: &Vec<Item>,
+) -> Result<IndexMap<String, Vec<Item>>, String> {
+    let mut map: IndexMap<String, Vec<Item>> = IndexMap::new();
+
+    for item in items {
+        let metrics_option = &item.metrics.get(metrics);
+        if !metrics_option.is_none() {
+            continue;
+        };
+        let metrics_str = metrics_option.map(|v| v.to_string()).unwrap();
+        match map.get_mut(&metrics_str) {
+            Some(list) => {
+                list.push(item.clone());
+            }
+            None => {
+                map.insert(metrics_str, vec![item.clone()]);
+            }
+        };
+    }
+    Ok(map)
 }

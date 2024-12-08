@@ -3,11 +3,14 @@ use crate::{
     controller::common::RocketState,
     get_conn_lock,
     service::{
-        query_group, query_indicator, query_line_chart, query_plain, CommonFilter, GroupRequest,
-        GroupResult, IndicatorRequest, LineChartRequest, LineChartResult, PlainResult,
+        query_group, query_indicator, query_line_chart, query_pie_chart, query_plain, CommonFilter, GroupRequest, GroupResult, IndicatorRequest, LineChartRequest, LineChartResult, PieChartRequest, PieChartResult, PlainResult
     },
 };
-use rocket::{post, serde::json::Json, State};
+use rocket::{
+    post,
+    serde::json::Json,
+    State,
+};
 use rust_decimal::Decimal;
 
 #[post("/plain", data = "<body>", format = "application/json")]
@@ -50,6 +53,17 @@ pub fn get_line_chart(
 ) -> Result<Json<LineChartResult>, HttpErrorJson> {
     let conn = get_conn_lock!(state.conn);
     query_line_chart(&conn, &body.0)
+        .map(Json)
+        .map_err(HttpErrorJson::from_msg)
+}
+
+#[post("/get_pie_chart", data = "<body>", format = "application/json")]
+pub fn get_pie_chart(
+    body: Json<PieChartRequest>,
+    state: &State<RocketState>,
+) -> Result<Json<PieChartResult>, HttpErrorJson> {
+    let conn = get_conn_lock!(state.conn);
+    query_pie_chart(&conn, &body.0)
         .map(Json)
         .map_err(HttpErrorJson::from_msg)
 }

@@ -3,12 +3,14 @@ mod convert;
 mod group;
 mod indicator;
 mod line_chart;
+mod pie_chart;
 mod plain;
 mod query;
 
 pub use group::*;
 pub use indicator::*;
 pub use line_chart::*;
+pub use pie_chart::*;
 pub use plain::*;
 
 use super::BucketKey;

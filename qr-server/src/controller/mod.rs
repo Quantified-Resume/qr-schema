@@ -37,6 +37,7 @@ pub fn register_controllers(conn: Mutex<Connection>) -> Rocket<Build> {
                 query::list_group,
                 query::get_indicator,
                 query::get_line_chart,
+                query::get_pie_chart,
             ],
         );
     rocket
