@@ -22,12 +22,12 @@ pub fn init_logger(config: &Config) {
     let mut dispatch = fern::Dispatch::new().level(log_level);
     if log_level == LevelFilter::Debug {
         dispatch = dispatch
-            .level_for("rocket", log::LevelFilter::Warn)
+            .level_for("rocket", log::LevelFilter::Info)
             // rocket_cors has a lot of unhelpful info messages that spam the log on every request
             // https://github.com/ActivityWatch/activitywatch/issues/975
-            .level_for("rocket_cors", log::LevelFilter::Warn)
-            .level_for("_", log::LevelFilter::Warn) // Rocket requests
-            .level_for("launch_", log::LevelFilter::Warn); // Rocket config info
+            .level_for("rocket_cors", log::LevelFilter::Info)
+            .level_for("_", log::LevelFilter::Info) // Rocket requests
+            .level_for("launch_", log::LevelFilter::Info); // Rocket config info
     }
     // Formatting
     dispatch

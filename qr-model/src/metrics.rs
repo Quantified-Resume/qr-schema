@@ -8,6 +8,7 @@ pub enum MetricsValueType {
     Time,
     Count,
     Amount,
+    Enum,
 }
 
 pub struct Metrics {

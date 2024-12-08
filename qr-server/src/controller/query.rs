@@ -57,7 +57,7 @@ pub fn get_line_chart(
         .map_err(HttpErrorJson::from_msg)
 }
 
-#[post("/get_pie_chart", data = "<body>", format = "application/json")]
+#[post("/pie-chart", data = "<body>", format = "application/json")]
 pub fn get_pie_chart(
     body: Json<PieChartRequest>,
     state: &State<RocketState>,

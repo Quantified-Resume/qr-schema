@@ -5,14 +5,20 @@ mod query;
 
 use std::sync::Mutex;
 
-use common::RocketState;
-use rocket::{routes, Build, Config, Rocket};
+use common::{HttpErrorJson, RocketState};
+use rocket::{catch, catchers, http::Status, routes, Build, Config, Request, Rocket};
 use rusqlite::Connection;
+
+#[catch(500)]
+fn handle_500(_status: Status, _req: &Request) -> HttpErrorJson {
+    HttpErrorJson::from_msg("Unexpected error occurred".to_string())
+}
 
 pub fn register_controllers(conn: Mutex<Connection>) -> Rocket<Build> {
     let ctx = RocketState::new(conn);
     let rocket = rocket::custom(Config::debug_default())
         .manage(ctx)
+        .register("/", catchers![handle_500])
         .mount(
             "/api/0/bucket",
             routes![

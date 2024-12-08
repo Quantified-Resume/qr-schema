@@ -91,18 +91,20 @@ pub fn group_by_metrics(
     let mut map: IndexMap<String, Vec<Item>> = IndexMap::new();
 
     for item in items {
-        let metrics_option = &item.metrics.get(metrics);
-        if !metrics_option.is_none() {
-            continue;
-        };
-        let metrics_str = metrics_option.map(|v| v.to_string()).unwrap();
-        match map.get_mut(&metrics_str) {
-            Some(list) => {
-                list.push(item.clone());
+        let val_opt = &item.metrics.get(metrics);
+
+        match val_opt.and_then(|v| v.as_str()) {
+            Some(val) => {
+                match map.get_mut(val) {
+                    Some(list) => {
+                        list.push(item.clone());
+                    }
+                    None => {
+                        map.insert(String::from(val), vec![item.clone()]);
+                    }
+                };
             }
-            None => {
-                map.insert(metrics_str, vec![item.clone()]);
-            }
+            None => {}
         };
     }
     Ok(map)

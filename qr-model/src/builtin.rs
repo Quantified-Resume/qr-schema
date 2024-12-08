@@ -23,6 +23,7 @@ impl Builtin {
             Builtin::BrowserTime => vec![
                 Metrics::new("visit", "Visit count", MetricsValueType::Count, false),
                 Metrics::new("focus", "Focus time", MetricsValueType::Time, false),
+                Metrics::new("host", "Host", MetricsValueType::Enum, false),
             ],
         }
     }

@@ -83,3 +83,19 @@ pub fn get_detail_by_ref_id(
         })?;
     Ok(Json(item))
 }
+
+#[test]
+pub fn test_create_request() {
+    use serde_json::from_str;
+
+    let json = r#"
+        {"refId":"20240307crowdin.com","timestamp":1709740800000,"metrics":{"visit":4,"focus":227119,"host":"crowdin.com"},"action":"web_time","name":"crowdin.com","payload":{"date":"20240307","host":"crowdin.com","cid":"linux-google-chrome-1733631558570"}}
+   "#;
+    let param: CreateRequest = from_str(json).unwrap();
+
+    assert!(param.metrics.len() == 3);
+    assert_eq!("crowdin.com", param.metrics.get("host").unwrap());
+
+    let item = param.to_item();
+    assert_eq!("crowdin.com", item.metrics.get("host").unwrap());
+}

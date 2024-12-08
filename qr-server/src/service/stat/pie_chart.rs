@@ -49,8 +49,9 @@ pub fn query_pie_chart(conn: &Connection, req: &PieChartRequest) -> Result<PieCh
         log::error!("Failed to query items: {:?}", e);
         "Failed to query items".to_string()
     })?;
-
+    log::debug!("{} items found for pie chart", items.len());
     let grouped_items = group_by(&req.cate, &req.filter, &items)?;
+    log::debug!("{} grouped items of pie chart", grouped_items.len());
     let mut series: Vec<PieSeries> = vec![];
     for s in &req.series {
         let series_item = calc_series(s, &grouped_items)?;
@@ -60,17 +61,19 @@ pub fn query_pie_chart(conn: &Connection, req: &PieChartRequest) -> Result<PieCh
 }
 
 fn group_by(
-    x: &PieChartCateQuery,
+    category: &PieChartCateQuery,
     filter: &CommonFilter,
     items: &Vec<Item>,
 ) -> Result<IndexMap<String, Vec<Item>>, String> {
-    match x.r#type {
+    match category.r#type {
         KeyValueType::Date => group_by_dates(filter, items),
-        KeyValueType::Metrics => x
-            .metrics
-            .clone()
-            .ok_or("Metrics key is required".to_string())
-            .and_then(|m| group_by_metrics(&m, items)),
+        KeyValueType::Metrics => {
+            let metrics = category
+                .metrics
+                .clone()
+                .ok_or("Metrics key is required".to_string())?;
+            group_by_metrics(&metrics, items)
+        }
     }
 }
 
@@ -84,6 +87,7 @@ fn calc_series(
         let val = sum(&items, &metrics)?;
         data.insert(k.to_string(), val);
     }
+    log::debug!("pie_series_sum: metrics={}, result={:?}", metrics, data);
     Ok(PieSeries {
         query: series.clone(),
         data,

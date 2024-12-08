@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use dateparser::DateTimeUtc;
 use qr_model::{Metrics, MetricsValueType};
 use rust_decimal::Decimal;
@@ -19,7 +21,7 @@ pub fn check_metrics(
 fn check_each(metrics: &Metrics, mut val_opt: Option<&Value>) -> Result<Option<Value>, String> {
     let val = match val_opt.take_if(|v| !v.is_null()) {
         None => match metrics.required {
-            true => return Err(format! {"Metrics field [{}] is required", metrics.field}),
+            true => return Err(format!("Metrics field [{}] is required", metrics.field)),
             false => return Ok(None),
         },
         Some(v) => v,
@@ -28,9 +30,10 @@ fn check_each(metrics: &Metrics, mut val_opt: Option<&Value>) -> Result<Option<V
     let type_check_res = match metrics.value_type {
         MetricsValueType::Time => check_time(val),
         MetricsValueType::Count => check_count(val),
-        MetricsValueType::Amount => check_amount(val).map_err(|e| format!("Invalid amount: {}", e)),
+        MetricsValueType::Amount => check_amount(val),
+        MetricsValueType::Enum => check_enum(val),
     };
-    type_check_res.map(|val| Some(val))
+    type_check_res.map(|val| Some(val)).map_err(String::from)
 }
 
 fn check_time(val: &Value) -> Result<Value, String> {
@@ -97,4 +100,12 @@ fn amount_of(currency: &Currency, value: Decimal) -> Value {
     );
     map.insert("value".to_string(), Value::String(value.to_string()));
     Value::Object(map)
+}
+
+fn check_enum(val: &Value) -> Result<Value, String> {
+    let enum_str = val.to_string();
+    Value::from_str(&enum_str).map_err(|e| {
+        log::error!("Unexpected error: {}", e);
+        "Unexpected error: check_enum".to_string()
+    })
 }
